@@ -14,12 +14,16 @@ server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from 
 def get_github_path(protocol: tool_args.available_protocols) -> str:
     if protocol in ["mindtrails_movement", "mindtrails_spanish"]:
         return f"https://github.com/TeachmanLab/{protocol}"
+    elif protocol=="github-mcp-test":
+        return f"https://github.com/DrewH711/{protocol}"
     else:
         return f"https://github.com/digital-trails/{protocol}"
     
 def get_owner_repo(protocol: tool_args.available_protocols) -> str:
     if protocol in ["mindtrails_movement", "mindtrails_spanish"]:
-        return f"TeachmanLab/{protocol}" 
+        return f"TeachmanLab/{protocol}"
+    elif protocol=="github-mcp-test":
+        return f"DrewH711/{protocol}"   
     else:
         return f"digital-trails/{protocol}"
 
@@ -45,15 +49,18 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
         return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
     
     repo_dir = args.protocol_name
-
+    
     if args.protocol_name!="github-mcp-test":
         subprocess.run(["python", "make/scripts/sessions.py"], cwd=repo_dir, check=True)
+        await ctx.report_progress(progress=25,total=100)
         subprocess.run(["python", "make/scripts/surveys.py"], cwd=repo_dir, check=True)
+        await ctx.report_progress(progress=30,total=100)
         if os.access(f'{repo_dir}/make/scripts/resources.py', mode=0): subprocess.run(["python","make/scripts/resources.py"], cwd=repo_dir)
 
         src = f"{repo_dir}/make/~out"
         dst = f"{repo_dir}/src/flows"
         shutil.copytree(src, dst, dirs_exist_ok=True)
+        await ctx.report_progress(progress=40,total=100)
 
     # get git diff and create changenotes
     git_diff_bytes = subprocess.run(f"git diff", cwd=repo_dir, capture_output=True, check=True).stdout
@@ -65,6 +72,7 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
         temperature=0.5,
         max_tokens=350
     )
+    await ctx.report_progress(progress=60,total=100)
 
     release_notes = release_notes_result.text
 
@@ -78,11 +86,14 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
         max_tokens=50
     )
 
+    await ctx.report_progress(progress=80,total=100)
+
     # commit and push changes
     subprocess.run(['git', 'add', '-A'], cwd=repo_dir, check=True)
     subprocess.run(["git", "commit", "-m", f"{commit_message_result.text}", "-m", f"{release_notes}"], cwd=repo_dir, check=True)
+    await ctx.report_progress(progress=90,total=100)
     subprocess.run(["git", "push"], cwd=repo_dir, check=True)
-
+    await ctx.report_progress(progress=100,total=100)
     return("Successfuly saved protocol")
     
 
