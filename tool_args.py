@@ -11,7 +11,6 @@ class protocolArgs(BaseModel):
         description=f"The protocol to clone. Options are: {literal_to_str(available_protocols)}"
         )
     
-    
 class releaseProtocolArgs(BaseModel):
     protocol_name: available_protocols = Field(
         description=f"The protocol to clone. Options are: {literal_to_str(available_protocols)}"

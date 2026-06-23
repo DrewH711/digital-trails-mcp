@@ -5,10 +5,11 @@ import subprocess
 import tool_args
 import os
 import shutil
+import requests
 
 load_dotenv("keys.env")
 
-server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, or UMA")
+server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test")
 
 def get_github_path(protocol: tool_args.available_protocols) -> str:
     if protocol in ["mindtrails_movement", "mindtrails_spanish"]:
@@ -29,7 +30,6 @@ def get_protocol(args: tool_args.protocolArgs):
         if os.access(args.protocol_name, mode=0):
             return f"Protocol '{args.protocol_name}' retrieved"
         
-        # subprocess.run(f"gh auth login --with-token {pat}")
         subprocess.run(f"git clone {get_github_path(args.protocol_name)}")
 
         return f"Protocol '{args.protocol_name}' retrieved"
@@ -46,13 +46,14 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
     
     repo_dir = args.protocol_name
 
-    subprocess.run(["python", "make/scripts/sessions.py"], cwd=repo_dir, check=True)
-    subprocess.run(["python", "make/scripts/surveys.py"], cwd=repo_dir, check=True)
-    if os.access(f'{repo_dir}/make/scripts/resources.py', mode=0): subprocess.run(["python","make/scripts/resources.py"], cwd=repo_dir)
+    if args.protocol_name!="github-mcp-test":
+        subprocess.run(["python", "make/scripts/sessions.py"], cwd=repo_dir, check=True)
+        subprocess.run(["python", "make/scripts/surveys.py"], cwd=repo_dir, check=True)
+        if os.access(f'{repo_dir}/make/scripts/resources.py', mode=0): subprocess.run(["python","make/scripts/resources.py"], cwd=repo_dir)
 
-    src = f"{repo_dir}/make/~out"
-    dst = f"{repo_dir}/src/flows"
-    shutil.copytree(src, dst, dirs_exist_ok=True)
+        src = f"{repo_dir}/make/~out"
+        dst = f"{repo_dir}/src/flows"
+        shutil.copytree(src, dst, dirs_exist_ok=True)
 
     # get git diff and create changenotes
     git_diff_bytes = subprocess.run(f"git diff", cwd=repo_dir, capture_output=True, check=True).stdout
@@ -67,12 +68,14 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
 
     release_notes = release_notes_result.text
 
+    await ctx.set_state(key = 'release notes', value=release_notes)
+
     commit_message_result = await ctx.sample(
         messages = f"Here are some change notes: {release_notes}" 
         "Summarize these into a one-line commit message.",
         system_prompt="Be descriptive but brief",
         temperature=0.3,
-        max_tokens=100
+        max_tokens=50
     )
 
     # commit and push changes
@@ -86,18 +89,20 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
 @server.tool(description="Create and publish new release for a protocol")
 async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context):
     # ensure existence of protocol
-    try:
-        if not os.access(args.protocol_name, mode=0):
-            return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
-    
-    except Exception as e:
-        return f"Exception occurred: {e}"
+
+    if not os.access(args.protocol_name, mode=0):
+        return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
     
     # save changes
-    x = await server.call_tool(name="save_protocol", arguments={'args':tool_args.protocolArgs(protocol_name=args.protocol_name)})
+    await server.call_tool(name="save_protocol", arguments={'args':tool_args.protocolArgs(protocol_name=args.protocol_name)})
 
     # create new release number and push release
-    last_release_number_bytes = subprocess.run(f"gh release list --repo {get_owner_repo(args.protocol_name)} --limit 1 --json tagName --jq '.[0].tagName'", capture_output=True).stdout
+    last_release_number_bytes = subprocess.run(
+        ["git", "describe", "--tags", "--abbrev=0"],
+        cwd=args.protocol_name,
+        capture_output=True,
+        check=True
+    ).stdout
 
     try:
         last_release_number = bytes.decode(last_release_number_bytes, 'utf-8')
@@ -107,24 +112,31 @@ async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context):
     except UnicodeDecodeError:
         last_release_number = "0.0.0"
 
-    print(f"last release={last_release_number}")
-
+    release_notes = await ctx.get_state('release notes')
 
     release_number_result = await ctx.sample(
-        messages=f"The previous release was numbered {last_release_number}. The release description are: {release_notes}. Based on the previous release number and description, give the new semantic versioning number. Normally, only the `patch` number should be incremented. If there are significant changes, you may increment the `minor` number. Never increment the `major` version number unless specifically instructed.",
+        messages=f"The previous release was numbered {last_release_number}. The release notes are: {release_notes}. Based on the previous release number and description, give the new semantic versioning number. Normally, only the `patch` number should be incremented. If there are significant changes, you may increment the `minor` number. Never increment the `major` version number unless specifically instructed.",
         system_prompt="Only provide the semantic versioning number and nothing else.",
-        temperature=0.05,
+        temperature=0,
         max_tokens=5
     )
 
     new_release_number = release_number_result.text
-
-    print(f"next release={new_release_number}")
-
-    subprocess.run(["git", 'tag', '-a' ,f'{new_release_number}', '-m ',f'{release_notes}'])
-    subprocess.run(["git", "push", "origin", f"{new_release_number}"])
     
-
+    # must use GitHub REST API to publish releases because it cannot be done via command line
+    requests.post(
+        f"https://api.github.com/repos/{get_owner_repo(args.protocol_name)}/releases",
+        headers={
+            "Authorization": f"Bearer {getenv('GITHUB_PAT')}",
+            "Accept": "application/vnd.github+json",
+        },
+        json={
+            "tag_name": new_release_number,
+            "name": new_release_number,
+            "body": release_notes,
+        },
+    ).raise_for_status()
+    
 
 if __name__ == '__main__':
     server.run(transport="streamable-http")
