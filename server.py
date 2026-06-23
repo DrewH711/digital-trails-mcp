@@ -1,7 +1,6 @@
 from fastmcp import FastMCP, Context
 from dotenv import load_dotenv
 from os import getenv
-from typing import Literal
 import subprocess
 import tool_args
 import os
@@ -19,7 +18,7 @@ def get_github_path(protocol: tool_args.available_protocols) -> str:
     
 def get_owner_repo(protocol: tool_args.available_protocols) -> str:
     if protocol in ["mindtrails_movement", "mindtrails_spanish"]:
-        return f"TeachmanLab/{protocol}"
+        return f"TeachmanLab/{protocol}" 
     else:
         return f"digital-trails/{protocol}"
 
@@ -47,8 +46,8 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
     
     repo_dir = args.protocol_name
 
-    subprocess.run(["python", "make/scripts/sessions.py"], cwd=repo_dir)
-    subprocess.run(["python", "make/scripts/surveys.py"], cwd=repo_dir)
+    subprocess.run(["python", "make/scripts/sessions.py"], cwd=repo_dir, check=True)
+    subprocess.run(["python", "make/scripts/surveys.py"], cwd=repo_dir, check=True)
     if os.access(f'{repo_dir}/make/scripts/resources.py', mode=0): subprocess.run(["python","make/scripts/resources.py"], cwd=repo_dir)
 
     src = f"{repo_dir}/make/~out"
@@ -56,7 +55,7 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
     shutil.copytree(src, dst, dirs_exist_ok=True)
 
     # get git diff and create changenotes
-    git_diff_bytes = subprocess.run(f"git diff", cwd=repo_dir, capture_output=True).stdout
+    git_diff_bytes = subprocess.run(f"git diff", cwd=repo_dir, capture_output=True, check=True).stdout
     git_diff = bytes.decode(git_diff_bytes, "utf-8", errors="ignore")
 
     release_notes_result = await ctx.sample(
@@ -80,11 +79,12 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
     subprocess.run(['git', 'add', '-A'], cwd=repo_dir, check=True)
     subprocess.run(["git", "commit", "-m", f"{commit_message_result.text}", "-m", f"{release_notes}"], cwd=repo_dir, check=True)
     subprocess.run(["git", "push"], cwd=repo_dir, check=True)
+
+    return("Successfuly saved protocol")
     
 
-# @server.tool(description="Create and publish new release for a protocol. Always run `get_protocol` first to ensure existence")
-async def release_protocol(args: tool_args.protocolArgs, ctx: Context):
-    release_notes=""
+@server.tool(description="Create and publish new release for a protocol")
+async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context):
     # ensure existence of protocol
     try:
         if not os.access(args.protocol_name, mode=0):
@@ -92,11 +92,9 @@ async def release_protocol(args: tool_args.protocolArgs, ctx: Context):
     
     except Exception as e:
         return f"Exception occurred: {e}"
-
-    # pull?
-
-
-    # delete and regenerate `out` folder
+    
+    # save changes
+    x = await server.call_tool(name="save_protocol", arguments={'args':tool_args.protocolArgs(protocol_name=args.protocol_name)})
 
     # create new release number and push release
     last_release_number_bytes = subprocess.run(f"gh release list --repo {get_owner_repo(args.protocol_name)} --limit 1 --json tagName --jq '.[0].tagName'", capture_output=True).stdout
