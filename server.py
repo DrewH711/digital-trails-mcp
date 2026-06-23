@@ -47,17 +47,19 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
     
     repo_dir = args.protocol_name
 
-    subprocess.run(["python", "make/scripts/sessions.py"], cwd=repo_dir)
-    subprocess.run(["python", "make/scripts/surveys.py"], cwd=repo_dir)
-    if os.access(f'{repo_dir}/make/scripts/resources.py', mode=0): subprocess.run(["python","make/scripts/resources.py"], cwd=repo_dir)
+    # subprocess.run(["python", "make/scripts/sessions.py"], cwd=repo_dir)
+    # subprocess.run(["python", "make/scripts/surveys.py"], cwd=repo_dir)
+    # if os.access(f'{repo_dir}/make/scripts/resources.py', mode=0): subprocess.run(["python","make/scripts/resources.py"], cwd=repo_dir)
 
     src = f"{repo_dir}/make/~out"
     dst = f"{repo_dir}/src/flows"
     shutil.copytree(src, dst, dirs_exist_ok=True)
+    print("files copied")
 
     # get git diff and create changenotes
     git_diff_bytes = subprocess.run(f"git diff", cwd=repo_dir, capture_output=True).stdout
     git_diff = bytes.decode(git_diff_bytes, "utf-8", errors="ignore")
+    print("git diff recieved")
 
     release_notes_result = await ctx.sample(
         messages=f"Here is the git diff. Summarize the changes into release notes.\n {git_diff}",
@@ -65,6 +67,7 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
         temperature=0.5,
         max_tokens=350
     )
+    print("release notes recieved")
 
     release_notes = release_notes_result.text
 
@@ -75,10 +78,15 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
         temperature=0.3,
         max_tokens=100
     )
+    print("commit message recieved")
 
     # commit and push changes
-    subprocess.run(f"git commit -m {commit_message_result.text} -m {release_notes}", cwd=repo_dir)
-    subprocess.run("git push", cwd=repo_dir)
+    subprocess.run(['git', 'add', '-A'], cwd=repo_dir, check=True)
+    print("git add done")
+    subprocess.run(["git", "commit", "-m", f"{commit_message_result.text}", "-m", f"{release_notes}"], cwd=repo_dir, check=True)
+    print('git commit done')
+    subprocess.run(["git", "push"], cwd=repo_dir, check=True)
+    print('git push done')
     
 
 # @server.tool(description="Create and publish new release for a protocol. Always run `get_protocol` first to ensure existence")
@@ -122,8 +130,8 @@ async def release_protocol(args: tool_args.protocolArgs, ctx: Context):
 
     print(f"next release={new_release_number}")
 
-    subprocess.run(f"git tag -a {new_release_number} -m '{release_notes}'")
-    subprocess.run(f"git push origin {new_release_number}")
+    subprocess.run(["git", 'tag', '-a' ,f'{new_release_number}', '-m ',f'{release_notes}'])
+    subprocess.run(["git", "push", "origin", f"{new_release_number}"])
     
 
 
