@@ -7,6 +7,7 @@ import tool_args
 import os
 import shutil
 import requests
+import json
 
 load_dotenv("keys.env")
 
@@ -163,9 +164,113 @@ async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context =
     ).raise_for_status()
 
 
-@server.resource("resource://example-json")
+@server.tool(description="Provides example JSON for flow screens with different input elements. Use this resource when generating JSON")
+def get_flow_screen_json_examples() -> str:
+    
+    scheduler_element_json = json.dumps({
+        "header_text": "",
+        "header_icon": "assets/subtitle.png",
+        "elements": [
+            {
+                "type": "Text",
+                "text": "You are encouraged to complete 4 short surveys tomorrow, 2 of which can be at a pre-scheduled time. Thinking ahead to your day tomorrow, are there specific times you would like to receive a notification to complete a ~5 minute program to help manage a stressful or upsetting situation?"
+            },
+            {
+                "type": "Scheduler",
+                "days_ahead": 1,
+                "action": "flow://flows/session",
+                "count": 1,
+                "message": "It's time for your session."
+            }
+        ]
+    })
 
+    slider_element_json = json.dumps(
+            {
+        "header_text": "",
+        "header_icon": "assets/subtitle.png",
+        "elements": [
+            {
+                "type": "Text",
+                "text": "I was able to manage my emotions today."
+            },
+            {
+                "type": "Text",
+                "Text": "1. Not at all effectively\n\n7. Very effectively"
+            },
+            {
+                "type": "Slider",
+                "min": 1,
+                "max": 7,
+                "others": [],
+                "name": "eodmanagefeelings",
+                "variable_name": "eodmanagefeelings"
+            }
+        ]
+    }
+    )
 
+    buttons_element_json = json.dumps(
+            {
+        "header_text": "",
+        "header_icon": "assets/subtitle.png",
+        "elements": [
+            {
+                "type": "Text",
+                "text": "How would you describe your current social context?"
+            },
+            {
+                "type": "Buttons",
+                "buttons": [
+                    "0::Alone - not around any other people",
+                    "1::Around other people that I am not actively interacting with (e.g., eating lunch in a crowded cafeteria but sitting alone)",
+                    "2::Around other people that I am actively interacting with (e.g., studying with a group of friends)"
+                ],
+                "ColumnCount": 1,
+                "name": "socialcontext",
+                "variable_name": "socialcontext"
+            }
+        ]
+    }
+    )
+
+    buttons_element_with_condition_json = json.dumps(
+            {
+        "header_text": "",
+        "header_icon": "assets/subtitle.png",
+        "elements": [
+            {
+                "type": "Text",
+                "text": "How vividly did you imagine the situation?"
+            },
+            {
+                "type": "Buttons",
+                "buttons": [
+                    "0::Not at all vivid",
+                    "1::Somewhat vivid",
+                    "2::Moderately vivid",
+                    "3::Very vivid",
+                    "4::Totally vivid",
+                    "5::Prefer not to answer"
+                ],
+                "ColumnCount": 1,
+                "name": "imagery_vivid"
+            }
+        ],
+        "condition": [
+            "interest",
+            "=",
+            0,
+            "&&",
+            "preanxious",
+            "<",
+            3
+        ]
+    }
+    )
+
+    return f"JSON with scheduler input: {scheduler_element_json}\n JSON with slider input: {slider_element_json}\n JSON with buttons: {buttons_element_json}\n JSON with buttons and a condition: {buttons_element_with_condition_json}"
+    
     
 
 if __name__ == '__main__':
