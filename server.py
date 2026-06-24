@@ -1,4 +1,5 @@
 from fastmcp import FastMCP, Context
+from fastmcp.dependencies import CurrentContext
 from dotenv import load_dotenv
 from os import getenv
 import subprocess
@@ -41,9 +42,22 @@ def get_protocol(args: tool_args.protocolArgs):
     except Exception as e:
         return f"Exception occurred: {e}"
     
+@server.tool(description="Ask the user to specify the protocol to perform actions on")
+async def specify_protocol(ctx: Context = CurrentContext()):
+    result = await ctx.elicit(
+        message = "Please specify a protocol to perform actions on",
+        response_type=tool_args.protocolArgs
+    )
+
+    if result.action=='accept':
+        return result.data.protocol_name
+    elif result.action=='decline':
+        return "No protocol specified"
+    else: return "Operation cancelled"
+    
     
 @server.tool(description="Save all changes to a protocol")
-async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
+async def save_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentContext()):
 
     if not os.access(args.protocol_name, mode=0):
         return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
@@ -98,7 +112,7 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context):
     
 
 @server.tool(description="Create and publish new release for a protocol")
-async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context):
+async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentContext()):
     # ensure existence of protocol
 
     if not os.access(args.protocol_name, mode=0):
@@ -147,6 +161,11 @@ async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context):
             "body": release_notes,
         },
     ).raise_for_status()
+
+
+@server.resource("resource://example-json")
+
+
     
 
 if __name__ == '__main__':
