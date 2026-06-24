@@ -1,13 +1,13 @@
 from fastmcp import FastMCP, Context
 from fastmcp.dependencies import CurrentContext
 from dotenv import load_dotenv
-from os import getenv
 import subprocess
 import tool_args
 import os
 import shutil
 import requests
 import json
+import pandas
 
 load_dotenv("keys.env")
 
@@ -158,7 +158,7 @@ async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context =
     requests.post(
         f"https://api.github.com/repos/{get_owner_repo(args.protocol_name)}/releases",
         headers={
-            "Authorization": f"Bearer {getenv('GITHUB_PAT')}",
+            "Authorization": f"Bearer {os.getenv('GITHUB_PAT')}",
             "Accept": "application/vnd.github+json",
         },
         json={
@@ -191,10 +191,15 @@ def get_file_contents(args: tool_args.readProtocolArgs):
 
     for path in args.file_paths:
 
-        with open(path) as file:
+        with open(path, encoding="utf-8", errors="replace") as file:
             file_contents[path] = file.read()
 
     return file_contents
+
+@server.tool(description="Read specific lines of a CSV")
+def read_csv(args: tool_args.readCSVArgs):
+    df = pandas.read_csv(args.file_path, encoding="utf-8", encoding_errors="replace")
+    return df.iloc[args.start:args.end].to_dict(orient='records')
 
 @server.tool(description="Provides example JSON for flow screens with different input elements. Use this resource when generating JSON")
 def get_flow_screen_json_examples() -> str:
