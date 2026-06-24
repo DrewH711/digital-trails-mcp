@@ -149,6 +149,11 @@ async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context =
 
     new_release_number = release_number_result.text
     
+    isPrerelease = await ctx.elicit(
+        message="Mark as prerelease?",
+        response_type=tool_args.latestOrPrerelease
+    )
+
     # must use GitHub REST API to publish releases because it cannot be done via command line
     requests.post(
         f"https://api.github.com/repos/{get_owner_repo(args.protocol_name)}/releases",
@@ -160,13 +165,16 @@ async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context =
             "tag_name": new_release_number,
             "name": new_release_number,
             "body": release_notes,
+            "prerelease": (isPrerelease.action=='accept' and isPrerelease.data.latest_or_prerelease == "prerelease")
         },
     ).raise_for_status()
+
+    return "Done"
 
 
 @server.tool(description="Provides example JSON for flow screens with different input elements. Use this resource when generating JSON")
 def get_flow_screen_json_examples() -> str:
-    
+
     scheduler_element_json = json.dumps({
         "header_text": "",
         "header_icon": "assets/subtitle.png",

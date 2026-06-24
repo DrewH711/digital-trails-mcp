@@ -15,3 +15,8 @@ class releaseProtocolArgs(BaseModel):
     protocol_name: available_protocols = Field(
         description=f"The protocol to clone. Options are: {literal_to_str(available_protocols)}"
         )
+    
+class latestOrPrerelease(BaseModel):
+    latest_or_prerelease: Literal['Latest','Prerelease'] = Field(
+        title="Should this release be marked as latest or as a prerelease?"
+    )
