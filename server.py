@@ -198,8 +198,41 @@ def get_file_contents(args: tool_args.readProtocolArgs):
 
 @server.tool(description="Read specific lines of a CSV")
 def read_csv(args: tool_args.readCSVArgs):
-    df = pandas.read_csv(args.file_path, encoding="utf-8", encoding_errors="replace")
+    df = pandas.read_csv(args.csv_path, encoding="utf-8", encoding_errors="replace")
     return df.iloc[args.start:args.end].to_dict(orient='records')
+
+@server.tool(description="Get CSV schema to make edits")
+def get_csv_schema(args: tool_args.readCSVArgs):
+    df = pandas.read_csv(args.csv_path, encoding="utf-8", encoding_errors="replace")
+    return list(df.head(0))
+
+@server.tool(description="Get indices of CSV rows that contain a specific string")
+def search_for_string_in_csv(args: tool_args.searchCSVArgs):
+    match_indices = set()
+    df = pandas.read_csv(args.csv_path, encoding="utf-8", encoding_errors="replace")
+    
+    if not args.column_name:
+        for column in df.iloc():
+
+            if args.search_string.lower().strip() in str(column).lower():
+                match_indices.add(column.name)
+    else:
+        try:
+            for i, item in enumerate(df[args.column_name]):
+                if args.search_string.lower().strip() in item.lower():
+                    match_indices.add(i)
+        except KeyError:
+            return f"'{args.column_name}' is not a valid column name for the CSV at path {args.csv_path}"
+
+    return f"Index matches: {match_indices}"
+
+@server.tool(description="Change a specific CSV cell")
+def edit_csv_cell(args: tool_args.editCSVArgs):
+    df = pandas.read_csv(args.csv_path, encoding="utf-8", encoding_errors="replace")
+
+    df.loc[args.row_index, args.column_name] = args.new_value
+
+    df.to_csv(args.csv_path)
 
 @server.tool(description="Provides example JSON for flow screens with different input elements. Use this resource when generating JSON")
 def get_flow_screen_json_examples() -> str:
