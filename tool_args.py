@@ -108,6 +108,23 @@ class editCSVArgs(BaseModel):
     new_value: str = Field(
         description="The new value to be placed into the cell"
     )
+
+class findAndReplaceArgs(BaseModel):
+    protocol_name: available_protocols = Field(
+        description="The name of the protocol that is being edited"
+    )
+
+    csv_path: CSVPath = Field(
+        description="Path to the CSV file being edited"
+    )
+
+    old_value: str = Field(
+        description="The value to search for"
+    )
+
+    new_value: str = Field(
+        description="The new value to replace the old value"
+    )
 class latestOrPrerelease(BaseModel):
     latest_or_prerelease: Literal['Latest','Prerelease'] = Field(
         title="Should this release be marked as latest or as a prerelease?"

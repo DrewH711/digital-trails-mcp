@@ -234,6 +234,17 @@ def edit_csv_cell(args: tool_args.editCSVArgs):
 
     df.to_csv(args.csv_path)
 
+@server.tool(description="Find and replace all occurrences of a string in a CSV file")
+def find_and_replace_in_csv(args: tool_args.findAndReplaceArgs):
+    df = pandas.read_csv(args.csv_path, encoding="utf-8", encoding_errors="replace")
+
+    df.replace(to_replace=args.old_value, value=args.new_value, inplace=True, regex=True)
+    
+    df.to_csv(args.csv_path)
+
+    return f"Replaced {args.old_value} with {args.new_value}"
+
+
 @server.tool(description="Provides example JSON for flow screens with different input elements. Use this resource when generating JSON")
 def get_flow_screen_json_examples() -> str:
 
