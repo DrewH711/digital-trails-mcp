@@ -125,6 +125,51 @@ class findAndReplaceArgs(BaseModel):
     new_value: str = Field(
         description="The new value to replace the old value"
     )
+
+def validate_script_path(path: str) -> str:
+    path = validate_path(path)
+    normalized = path.replace('\\', '/')
+    if '/make/scripts/' not in normalized or not normalized.endswith('.py'):
+        raise ValueError('Path must point to a Python file under <protocol>/make/scripts')
+    return path
+
+ScriptPath = Annotated[str, AfterValidator(validate_script_path)]
+
+class editScriptArgs(BaseModel):
+    protocol_name: available_protocols = Field(
+        description="The protocol that owns the script"
+    )
+
+    script_path: ScriptPath = Field(
+        description="Path to a Python script under <protocol>/make/scripts"
+    )
+
+    new_contents: str = Field(
+        description="Complete replacement contents for the script"
+    )
+
+class editScriptLinesArgs(BaseModel):
+    protocol_name: available_protocols
+
+    script_path: ScriptPath = Field(
+        description="Path to a Python script under <protocol>/make/scripts"
+    )
+
+    start_line: int = Field(ge=1, description="First line to replace (1-based)")
+    end_line: int = Field(ge=1, description="Last line to replace (1-based, inclusive)")
+
+    replacement_text: str = Field(
+        description="Replacement text for the specified line range. Pass an empty string to delete the range."
+    )
+
+    @model_validator(mode='after')
+    def check_line_order(self):
+        if self.end_line < self.start_line:
+            raise ValueError(
+                f"end_line ({self.end_line}) must be greater than or equal to start_line ({self.start_line})"
+            )
+        return self
+
 class latestOrPrerelease(BaseModel):
     latest_or_prerelease: Literal['Latest','Prerelease'] = Field(
         title="Should this release be marked as latest or as a prerelease?"
