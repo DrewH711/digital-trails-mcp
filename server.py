@@ -182,15 +182,15 @@ def get_protocol_csv_list(protocol: tool_args.available_protocols):
 
     if not os.access(protocol, mode=0): return f"Protocol {protocol} not found. Use `get_protocol` tool first."
 
-    path = os.getcwd() + f"/{protocol}/make/CSV"
-    return [file for file in os.listdir(path) if (file.endswith(".csv") and "image" not in file)]
+    path = os.getcwd() + f"/{protocol}/make/CSV/"
+    return [(path+file) for file in os.listdir(path) if (file.endswith(".csv") and "image" not in file)]
 
 @server.tool(description="View list of available python scripts")
 def get_protocol_python_script_list(protocol: tool_args.available_protocols):
     if not os.access(protocol, mode=0): return f"Protocol {protocol} not found. Use `get_protocol` tool first."
     
-    path = os.getcwd() + f"/{protocol}/make/scripts"
-    return [file for file in os.listdir(path) if (file.endswith(".py") and "image" not in file)]
+    path = os.getcwd() + f"/{protocol}/make/scripts/"
+    return [(path+file) for file in os.listdir(path) if (file.endswith(".py") and "image" not in file)]
 
 @server.tool(description="Get file contents from a protocol")
 def get_file_contents(args: tool_args.readProtocolArgs):
