@@ -23,7 +23,7 @@ CSVPath = Annotated[FilePath, AfterValidator(validate_csv_path)]
 
 class protocolArgs(BaseModel):
     protocol_name: available_protocols = Field(
-        description=f"The protocol to clone. Options are: {literal_to_str(available_protocols)}"
+        description=f"The protocol in use. Options are: {literal_to_str(available_protocols)}"
         )
     
 class readProtocolArgs(BaseModel):

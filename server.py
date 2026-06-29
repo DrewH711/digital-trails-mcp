@@ -40,7 +40,7 @@ def get_protocol(args: tool_args.protocolArgs):
         return f"Protocol '{args.protocol_name}' retrieved"
     
     except Exception as e:
-        return f"Exception occurred: {e}"
+        raise Exception(f"An unexpected exception occurred while retrieving protocol. Ensure that the protocol name is valid. Error msg: {e}")
     
 @server.tool(description="Ask the user to specify the protocol to perform actions on")
 async def specify_protocol(ctx: Context = CurrentContext()):
@@ -56,15 +56,15 @@ async def specify_protocol(ctx: Context = CurrentContext()):
     else: return "Operation cancelled"
     
     
-@server.tool(description="Save all changes to a protocol")
-async def save_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentContext()):
+@server.tool(description="Build a protocol to prepare for a save and/or release")
+async def build_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentContext()):
 
     if not os.access(args.protocol_name, mode=0):
         return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
     
-    repo_dir = args.protocol_name
-    
-    if args.protocol_name!="github-mcp-test":
+    repo_dir = f'{os.getcwd()}/{args.protocol_name}'
+
+    try:
         subprocess.run(["python", "make/scripts/sessions.py"], cwd=repo_dir, check=True)
         await ctx.report_progress(progress=40,total=100)
         subprocess.run(["python", "make/scripts/surveys.py"], cwd=repo_dir, check=True)
@@ -74,71 +74,100 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCont
         src = f"{repo_dir}/make/~out"
         dst = f"{repo_dir}/src/flows"
         shutil.copytree(src, dst, dirs_exist_ok=True)
-        await ctx.report_progress(progress=50,total=100)
+        await ctx.report_progress(progress=60,total=100)
+    
+        # get git diff and create changenotes
+        git_diff_bytes = subprocess.run( ['git','diff','--diff-algorithm','minimal','--','make/CSV', 'make/scripts', ':(exclude)src/flows', ':(exclude)make/~out'], cwd=repo_dir, capture_output=True, check=True).stdout
+        git_diff = bytes.decode(git_diff_bytes, "utf-8", errors="ignore")
 
-    # get git diff and create changenotes
-    git_diff_bytes = subprocess.run(['git','diff','--diff-algorithm','minimal'], cwd=repo_dir, capture_output=True, check=True).stdout
-    git_diff = bytes.decode(git_diff_bytes, "utf-8", errors="ignore")
+        await ctx.set_state(key=f'release notes {args.protocol_name}', value='')
 
-    release_notes_result = await ctx.sample(
-        messages=f"Here is the git diff. Summarize the changes into release notes.\n {git_diff[0:1000]}", # truncate git diff at 1000 characters to stay within context window
-        system_prompt="Provide a bulleted list of changes. Be brief",
-        temperature=0.5,
-        max_tokens=350
-    )
-    await ctx.report_progress(progress=65,total=100)
+        release_notes_result = await ctx.sample(
+            messages=f"Review this git diff and write concise and accurate release notes: {git_diff}",
+            system_prompt="Provide a bulleted list. Be brief",
+            temperature=0.5,
+            max_tokens=350
+        )
+    
+        release_notes = release_notes_result.text
 
-    release_notes = release_notes_result.text
+        await ctx.set_state(key = f'release notes {args.protocol_name}', value = release_notes)
+        await ctx.report_progress(progress=75,total=100)
 
-    await ctx.set_state(key = 'release notes', value=release_notes)
 
-    commit_message_result = await ctx.sample(
-        messages = f"Here are some change notes: {release_notes}" 
-        "Summarize these into a one-line commit message.",
-        system_prompt="Be descriptive but brief",
-        temperature=0.3,
-        max_tokens=50
-    )
+        commit_message_result = await ctx.sample(
+            messages = f"Here are some change notes: {release_notes}" 
+            "Summarize these into a one-line commit message.",
+            system_prompt="Be descriptive but brief",
+            temperature=0.3,
+            max_tokens=50
+        )
 
-    await ctx.report_progress(progress=90,total=100)
+        await ctx.set_state(key = f'commit message {args.protocol_name}', value = commit_message_result.text)
 
+        await ctx.report_progress(progress=100,total=100)
+
+        return f"Built {args.protocol_name} succesfully"
+
+    except subprocess.CalledProcessError as e:
+        raise Exception(f"Build failed due to subprocess error. Error message: {e}")
+    except Exception as e:
+        raise Exception(f"Build failed due to unexpected exception. Error message: {e}")
+    
+@server.tool(description="Save protocol without releasing. Default to this over save and release. Save after building and before releasing.")
+async def save_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentContext()):
+    
     # commit and push changes
-    subprocess.run(['git','switch','agent-testing'], cwd=repo_dir, check=True)
-    subprocess.run(['git', 'add', '-A'], cwd=repo_dir, check=True)
-    subprocess.run(["git", "commit", "-m", f"{commit_message_result.text}", "-m", f"{release_notes}"], cwd=repo_dir, check=True)
-    await ctx.report_progress(progress=95,total=100)
-    subprocess.run(["git", "push"], cwd=repo_dir, check=True)
-    await ctx.report_progress(progress=100,total=100)
-    return("Successfuly saved protocol")
-    
+    repo_dir = f'{os.getcwd()}/{args.protocol_name}'
 
-@server.tool(description="Create and publish new release for a protocol")
-async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentContext()):
-    # ensure existence of protocol
-
-    if not os.access(args.protocol_name, mode=0):
+    if not os.access(repo_dir, mode=0):
         return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
+
+    commit_message = await ctx.get_state(f'commit message {args.protocol_name}')
+    release_notes = await ctx.get_state(f'release notes {args.protocol_name}')
+
+    if not commit_message or not release_notes:
+        return "No commit message or release notes found. Run `build_protocol` before saving."
     
-    # save changes
-    await server.call_tool(name="save_protocol", arguments={'args':tool_args.protocolArgs(protocol_name=args.protocol_name)})
-
-    # create new release number and push release
-    last_release_number_bytes = subprocess.run(
-        ["git", "describe", "--tags", "--abbrev=0"],
-        cwd=args.protocol_name,
-        capture_output=True,
-        check=True
-    ).stdout
-
     try:
-        last_release_number = bytes.decode(last_release_number_bytes, 'utf-8')
+
+        subprocess.run(['git','switch','agent-testing'], cwd=repo_dir, check=True)
+        subprocess.run(['git', 'add', '-A'], cwd=repo_dir, check=True)
+        subprocess.run(["git", "commit", "-m", f"{commit_message}", "-m", f"{release_notes}"], cwd=repo_dir, check=True)
+        subprocess.run(["git", "push"], cwd=repo_dir, check=True)
+
+    except subprocess.SubprocessError as e:
+        raise Exception(f"Failed to save due to subprocess error. Error message: {e}")
+
+    return(f"Successfuly saved {args.protocol_name}")
+
+@server.tool(description="Create a new release version of this protocol and push it to GitHub. Always build and save first")
+async def release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentContext()):
+    # create new release number and push release
+    try:
+        last_release_number_bytes = subprocess.run(
+            ["git", "describe", "--tags", "--abbrev=0"],
+            cwd=args.protocol_name,
+            capture_output=True,
+            check=True
+        ).stdout
+
+        last_release_number = bytes.decode(last_release_number_bytes, 'utf-8').strip()
         if(len(last_release_number)==0):
             last_release_number = "0.0.0"
 
-    except UnicodeDecodeError:
+    except UnicodeDecodeError as e:
+        raise Exception(f"Release failed due to unicode decoding error. Error msg: {e}")
+
+    except subprocess.CalledProcessError:
+        # `git describe` exits non-zero when the repo has no tags yet; treat this
+        # as the very first release rather than a failure.
         last_release_number = "0.0.0"
 
-    release_notes = await ctx.get_state('release notes')
+    except subprocess.SubprocessError as e:
+        raise Exception(f"Release failed due to subprocess error while attempting to get previous release number. Error: {e}")
+
+    release_notes = await ctx.get_state(f'release notes {args.protocol_name}')
 
     release_number_result = await ctx.sample(
         messages=f"The previous release was numbered {last_release_number}. The release notes are: {release_notes}. Based on the previous release number and description, give the new semantic versioning number. Normally, only the `patch` number should be incremented. If there are significant changes, you may increment the `minor` number. Never increment the `major` version number unless specifically instructed.",
@@ -147,61 +176,93 @@ async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context =
         max_tokens=5
     )
 
-    new_release_number = _validate_semver(release_number_result.text) #type: ignore
-    
+    new_release_number, semver_validation_error = _validate_semver(release_number_result.text) #type: ignore
+    if semver_validation_error:
+        raise Exception(f"Release failed due to invalid semantic versioning number. Error: {semver_validation_error}")
+
     isPrerelease = await ctx.elicit(
         message="Mark as prerelease?",
         response_type=tool_args.latestOrPrerelease
     )
 
     # must use GitHub REST API to publish releases because it cannot be done via command line
-    requests.post(
-        f"https://api.github.com/repos/{get_owner_repo(args.protocol_name)}/releases",
-        headers={
-            "Authorization": f"Bearer {os.getenv('GITHUB_PAT')}",
-            "Accept": "application/vnd.github+json",
-        },
-        json={
-            "tag_name": new_release_number,
-            "name": new_release_number,
-            "body": release_notes,
-            "prerelease": (isPrerelease.action=='accept' and isPrerelease.data.latest_or_prerelease == "prerelease")
-        },
-    ).raise_for_status()
+    try:
+        requests.post(
+            f"https://api.github.com/repos/{get_owner_repo(args.protocol_name)}/releases",
+            headers={
+                "Authorization": f"Bearer {os.getenv('GITHUB_PAT')}",
+                "Accept": "application/vnd.github+json",
+            },
+            json={
+                "tag_name": new_release_number,
+                "name": new_release_number,
+                "body": release_notes,
+                "prerelease": (isPrerelease.action=='accept' and isPrerelease.data.latest_or_prerelease == "prerelease")
+            },
+        ).raise_for_status()
 
-    return "Protocol released successfully"
+    except requests.HTTPError as e:
+        raise Exception(f"An error occurred while publishing release to GitHub. Error msg: {e}")
+
+    return f"{args.protocol_name} released successfully"
+
+
+
+@server.tool(description="Create and publish new release for a protocol")
+async def build_save_and_release_protocol(args: tool_args.protocolArgs):
+
+    if not os.access(args.protocol_name, mode=0):
+        return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
+    
+    # A failing sub-tool raises ToolError out of `call_tool` (it does not return a
+    # ToolResult with is_error=True), so each stage is wrapped to short-circuit
+    # with a clear message instead of falsely reporting success.
+    try:
+        await server.call_tool(name="build_protocol", arguments={'args':tool_args.protocolArgs(protocol_name=args.protocol_name)})
+    except Exception as e:
+        return f"Build failed for {args.protocol_name}. Error: {e}"
+
+    try:
+        await server.call_tool(name="save_protocol", arguments={'args':tool_args.protocolArgs(protocol_name=args.protocol_name)})
+    except Exception as e:
+        return f"Save failed for {args.protocol_name}. Error: {e}"
+
+    try:
+        await server.call_tool(name="release_protocol", arguments={'args':tool_args.protocolArgs(protocol_name=args.protocol_name)})
+    except Exception as e:
+        return f"Release failed for {args.protocol_name}. Error: {e}"
+
+    return f"Successfully built, saved, and released {args.protocol_name}"
 
 # return lists of paths to python scripts and CSVs
 # There are far too many JSON files to be useful, and they will be regenerated by the scripts on release anyway
 @server.tool(description="List file paths from a protocol")
-def get_protocol_csv_list(protocol: tool_args.available_protocols):
+def get_protocol_csv_list(args: tool_args.protocolArgs):
 
-    if not os.access(protocol, mode=0): return f"Protocol {protocol} not found. Use `get_protocol` tool first."
-
-    path = f"./{protocol}/make/CSV/"
+    if not os.access(args.protocol_name, mode=0): return f"Protocol {args.protocol_name} not found. Use `get_protocol` tool first."
+    path = f"./{args.protocol_name}/make/CSV/"
     return [(path+file) for file in os.listdir(path) if (file.endswith(".csv") and "image" not in file)]
 
 @server.tool(description="View list of available python scripts")
-def get_protocol_python_script_list(protocol: tool_args.available_protocols):
-    if not os.access(protocol, mode=0): return f"Protocol {protocol} not found. Use `get_protocol` tool first."
-    
-    path = f"./{protocol}/make/scripts/"
+def get_protocol_python_script_list(args: tool_args.protocolArgs):
+    if not os.access(args.protocol_name, mode=0): return f"Protocol {args.protocol_name} not found. Use `get_protocol` tool first."
+    path = f"./{args.protocol_name}/make/scripts/"
     return [(path+file) for file in os.listdir(path) if (file.endswith(".py") and "image" not in file)]
 
 @server.tool(description="View list of special json files such as instructions")
-def get_protocol_special_json(protocol: tool_args.available_protocols):
-    if not os.access(protocol, mode=0): return f"Protocol {protocol} not found. Use `get_protocol` tool first."
+def get_protocol_special_json(args: tool_args.protocolArgs):
+    if not os.access(args.protocol_name, mode=0): return f"Protocol {args.protocol_name} not found. Use `get_protocol` tool first."
     
     # get json from /src, then /flows
     file_paths = []
 
-    src_path = f"./{protocol}/src"
+    src_path = f"./{args.protocol_name}/src/"
     for file in os.listdir(src_path):
         if file.endswith(".json"): file_paths.append(src_path + file)
 
-    flows_path = src_path + "/flows"
+    flows_path = src_path + "flows/"
     for file in os.listdir(flows_path):
-        if file.endswith(".json"): file_paths.append(src_path + file)
+        if file.endswith(".json"): file_paths.append(flows_path + file)
 
     return file_paths
 

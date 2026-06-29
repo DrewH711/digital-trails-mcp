@@ -1,3 +1,20 @@
+import re
+
+def _validate_semver(raw: str):
+
+    semver_pattern = r'^[0-9]+\.[0-9]+\.[0-9]+$'
+    if raw is None:
+        return None, "Release rejected: no version number was produced."
+
+    version = raw.strip()
+    if not re.match(semver_pattern, version):
+        return None, (
+            f"Release rejected: '{raw}' is not a valid semantic version "
+            f"(expected MAJOR.MINOR.PATCH (without 'v'), e.g. 1.2.3). No release was created."
+        )
+
+    return version, None
+
 def _check_python_syntax(source: str, path: str):
     """Return an error message if `source` is not valid Python, otherwise None.
 
