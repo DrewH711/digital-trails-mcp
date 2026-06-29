@@ -8,7 +8,7 @@ import shutil
 import requests
 import json
 import pandas
-from utils import _check_python_syntax, _numbered_excerpt
+from utils import _check_python_syntax, _numbered_excerpt, _validate_semver
 
 load_dotenv("keys.env")
 
@@ -151,7 +151,7 @@ async def save_and_release_protocol(args: tool_args.protocolArgs, ctx: Context =
         max_tokens=5
     )
 
-    new_release_number = release_number_result.text
+    new_release_number = _validate_semver(release_number_result.text) #type: ignore
     
     isPrerelease = await ctx.elicit(
         message="Mark as prerelease?",
@@ -182,15 +182,32 @@ def get_protocol_csv_list(protocol: tool_args.available_protocols):
 
     if not os.access(protocol, mode=0): return f"Protocol {protocol} not found. Use `get_protocol` tool first."
 
-    path = os.getcwd() + f"/{protocol}/make/CSV/"
+    path = f"./{protocol}/make/CSV/"
     return [(path+file) for file in os.listdir(path) if (file.endswith(".csv") and "image" not in file)]
 
 @server.tool(description="View list of available python scripts")
 def get_protocol_python_script_list(protocol: tool_args.available_protocols):
     if not os.access(protocol, mode=0): return f"Protocol {protocol} not found. Use `get_protocol` tool first."
     
-    path = os.getcwd() + f"/{protocol}/make/scripts/"
+    path = f"./{protocol}/make/scripts/"
     return [(path+file) for file in os.listdir(path) if (file.endswith(".py") and "image" not in file)]
+
+@server.tool(description="View list of special json files such as instructions")
+def get_protocol_special_json(protocol: tool_args.available_protocols):
+    if not os.access(protocol, mode=0): return f"Protocol {protocol} not found. Use `get_protocol` tool first."
+    
+    # get json from /src, then /flows
+    file_paths = []
+
+    src_path = f"./{protocol}/src"
+    for file in os.listdir(src_path):
+        if file.endswith(".json"): file_paths.append(src_path + file)
+
+    flows_path = src_path + "/flows"
+    for file in os.listdir(flows_path):
+        if file.endswith(".json"): file_paths.append(src_path + file)
+
+    return file_paths
 
 @server.tool(description="Get file contents from a protocol")
 def get_file_contents(args: tool_args.readProtocolArgs):
