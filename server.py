@@ -17,16 +17,12 @@ server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from 
 def get_github_path(protocol: tool_args.available_protocols) -> str:
     if protocol in ["mindtrails_movement", "mindtrails_spanish"]:
         return f"https://github.com/TeachmanLab/{protocol}"
-    elif protocol=="github-mcp-test":
-        return f"https://github.com/DrewH711/{protocol}"
     else:
         return f"https://github.com/digital-trails/{protocol}"
     
 def get_owner_repo(protocol: tool_args.available_protocols) -> str:
     if protocol in ["mindtrails_movement", "mindtrails_spanish"]:
-        return f"TeachmanLab/{protocol}"
-    elif protocol=="github-mcp-test":
-        return f"DrewH711/{protocol}"   
+        return f"TeachmanLab/{protocol}" 
     else:
         return f"digital-trails/{protocol}"
 

@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, model_validator, field_validator, AfterVa
 from typing import Literal, Optional, Annotated
 import os
 
-available_protocols = Literal["protocol-uma","protocol-leia","mindtrails_movement","mindtrails_spanish","github-mcp-test"]
+available_protocols = Literal["protocol-uma","protocol-leia","mindtrails_movement","mindtrails_spanish"]
 
 def literal_to_str(literal):
     return str(literal).replace("typing.Literal","")
