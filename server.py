@@ -262,6 +262,29 @@ def get_protocol_special_json(args: tool_args.protocolArgs):
 
     return file_paths
 
+@server.tool(description="Replace the contents of an EXISTING CSV file in a protocol's make/CSV directory with uploaded text. Match-existing-names-only: an upload whose file_name has no matching file in the directory is rejected. Used by the web portal to swap in user-supplied CSVs before a build.")
+def swap_csv(args: tool_args.swapCSVArgs):
+
+    if not os.access(args.protocol_name, mode=0):
+        return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
+
+    csv_dir = f"./{args.protocol_name}/make/CSV"
+    target = os.path.join(csv_dir, args.file_name)
+
+    # Match-existing-names-only: never create a new file from an upload, so a
+    # mistyped name surfaces as an error instead of a stray CSV in the build.
+    if not os.path.isfile(target):
+        raise Exception(
+            f"'{args.file_name}' does not match any existing CSV in {csv_dir}. "
+            f"Upload rejected (match-existing-names-only)."
+        )
+
+    # newline="" so the uploaded file's own line endings are preserved verbatim.
+    with open(target, "w", encoding="utf-8", newline="") as file:
+        file.write(args.content)
+
+    return f"Swapped {args.file_name} ({len(args.content)} characters written)"
+
 @server.tool(description="Get file contents from a protocol")
 def get_file_contents(args: tool_args.readProtocolArgs):
 

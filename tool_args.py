@@ -123,6 +123,30 @@ class findAndReplaceArgs(BaseModel):
         description="The new value to replace the old value"
     )
 
+def validate_csv_basename(name: str) -> str:
+    """Accept only a bare CSV file name (no directory component, no traversal)."""
+    cleaned = name.replace("\\", "/")
+    if "/" in cleaned or cleaned in ("", ".", ".."):
+        raise ValueError(f"file_name must be a bare CSV file name with no path, got '{name}'")
+    if not cleaned.lower().endswith(".csv"):
+        raise ValueError(f"'{name}' is not a CSV file")
+    return cleaned
+
+CSVFileName = Annotated[str, AfterValidator(validate_csv_basename)]
+
+class swapCSVArgs(BaseModel):
+    protocol_name: available_protocols = Field(
+        description=f"The protocol whose CSV is being replaced. Options are: {literal_to_str(available_protocols)}"
+    )
+
+    file_name: CSVFileName = Field(
+        description="Bare name of the CSV file to replace, e.g. 'images.csv'. Must already exist in <protocol>/make/CSV."
+    )
+
+    content: str = Field(
+        description="Full UTF-8 text contents of the replacement CSV"
+    )
+
 def validate_script_path(path: str) -> str:
     path = validate_path(path)
     normalized = path.replace('\\', '/')
