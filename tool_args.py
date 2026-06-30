@@ -63,9 +63,6 @@ class readCSVArgs(BaseModel):
 
             if self.start and abs(self.end-self.start) > 200:
                 raise ValueError(f"end-start cannot be greater than 200 but was {self.end-self.start}")
-
-            if self.end > file_length:
-                raise ValueError(f"End index {self.end} out of range for file with {file_length} lines")
         
         return self
     

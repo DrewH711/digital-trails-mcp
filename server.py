@@ -372,19 +372,34 @@ def search_for_string_in_csv(args: tool_args.searchCSVArgs):
 
 @server.tool(description="Change a specific CSV cell")
 def edit_csv_cell(args: tool_args.editCSVArgs):
-    df = pandas.read_csv(args.csv_path, encoding="utf-8", encoding_errors="replace")
 
-    df.loc[args.row_index, args.column_name] = args.new_value
+    header = get_csv_schema(args=tool_args.readCSVArgs(protocol_name=args.protocol_name, csv_path=args.csv_path))
 
-    df.to_csv(args.csv_path, index=False)
+    if args.column_name not in header:
+        raise Exception(f"Edit failed. {args.column_name} is not a valid column in this file. Check spelling and capitalization")
+
+    try:
+        df = pandas.read_csv(args.csv_path, encoding="utf-8", encoding_errors="replace")
+
+        df.loc[args.row_index, args.column_name] = args.new_value
+
+        df.to_csv(args.csv_path, index=False)
+
+    except Exception as e:
+        raise Exception(f"Unexpected exception encountered while editing CSV. Error msg: {e}")
+
+    return f"Sucessfully changed row {args.row_index} of {args.column_name} to {args.new_value}"
 
 @server.tool(description="Find and replace all occurrences of a string in a CSV file")
 def find_and_replace_in_csv(args: tool_args.findAndReplaceArgs):
+
+    header = get_csv_schema(args=tool_args.readCSVArgs(protocol_name=args.protocol_name, csv_path=args.csv_path))
+
     df = pandas.read_csv(args.csv_path, encoding="utf-8", encoding_errors="replace")
 
     df.replace(to_replace=args.old_value, value=args.new_value, inplace=True, regex=True)
-    
-    df.to_csv(args.csv_path, index=False)
+
+    df.to_csv(args.csv_path, index=False, header=['' if ("Unnamed:" in str(h)) else str(h) for h in header])
 
     return f"Replaced {args.old_value} with {args.new_value}"
 
