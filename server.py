@@ -145,27 +145,23 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCont
 async def release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentContext()):
     # create new release number and push release
     try:
-        last_release_number_bytes = subprocess.run(
-            ["git", "describe", "--tags", "--abbrev=0"],
-            cwd=args.protocol_name,
-            capture_output=True,
-            check=True
-        ).stdout
+        releases_response = requests.get(
+            f"https://api.github.com/repos/{get_owner_repo(args.protocol_name)}/releases",
+            headers={
+                "Authorization": f"Bearer {os.getenv('GITHUB_PAT')}",
+                "Accept": "application/vnd.github+json",
+            },
+            params={"per_page": 1},
+        )
+        releases_response.raise_for_status()
+        releases = releases_response.json()
 
-        last_release_number = bytes.decode(last_release_number_bytes, 'utf-8').strip()
-        if(len(last_release_number)==0):
+        last_release_number = releases[0]["tag_name"].strip() if releases else "0.0.0"
+        if len(last_release_number) == 0:
             last_release_number = "0.0.0"
 
-    except UnicodeDecodeError as e:
-        raise Exception(f"Release failed due to unicode decoding error. Error msg: {e}")
-
-    except subprocess.CalledProcessError:
-        # `git describe` exits non-zero when the repo has no tags yet; treat this
-        # as the very first release rather than a failure.
-        last_release_number = "0.0.0"
-
-    except subprocess.SubprocessError as e:
-        raise Exception(f"Release failed due to subprocess error while attempting to get previous release number. Error: {e}")
+    except requests.HTTPError as e:
+        raise Exception(f"Release failed while fetching the previous release number from GitHub. Error: {e}")
 
     release_notes = await ctx.get_state(f'release notes {args.protocol_name}')
 
@@ -351,6 +347,7 @@ def read_csv(args: tool_args.readCSVArgs):
 @server.tool(description="Get CSV schema to make edits")
 def get_csv_schema(args: tool_args.readCSVArgs):
     df = pandas.read_csv(args.csv_path, encoding="utf-8", encoding_errors="replace")
+    if "LEIA Interventions, Resources, and Tips - Long Scenarios.csv" in args.csv_path: return list(df.head(1)) # This particular file is weird
     return list(df.head(0))
 
 @server.tool(description="Get indices of CSV rows that contain a specific string")
