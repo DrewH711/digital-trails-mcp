@@ -8,4 +8,5 @@ dependencies = [
     "fastmcp>=3.4.2",
     "pandas>=3.0.3",
     "pydantic-ai>=1.107.0",
+    "pygit2>=1.19.3",
 ]

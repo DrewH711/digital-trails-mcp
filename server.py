@@ -8,39 +8,39 @@ import shutil
 import requests
 import json
 import pandas
-from utils import _check_python_syntax, _numbered_excerpt, _validate_semver
+from utils import _check_python_syntax, _numbered_excerpt, _validate_semver, get_github_path, next_tag
+import pygit2 as git
 
 load_dotenv("keys.env")
 
-server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test")
+userpass = git.UserPass(
+    username ="Digital Trails Auto-Commit Bot",
+    password = os.getenv('LEIA_PAT') # type: ignore
+)
 
-def get_github_path(protocol: tool_args.available_protocols) -> str:
-    if protocol in ["mindtrails_movement", "mindtrails_spanish"]:
-        return f"https://github.com/TeachmanLab/{protocol}"
-    else:
-        return f"https://github.com/digital-trails/{protocol}"
-    
-def get_owner_repo(protocol: tool_args.available_protocols) -> str:
-    if protocol in ["mindtrails_movement", "mindtrails_spanish"]:
-        return f"TeachmanLab/{protocol}" 
-    else:
-        return f"digital-trails/{protocol}"
+GITHUB_CREDENTIALS = git.RemoteCallbacks(credentials=userpass)
+
+
+
+server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test")
 
 @server.tool(description="Clone a protocol into the current directory so it can be read and modified")
 def get_protocol(args: tool_args.protocolArgs):
     
-    try:
-        if os.access(args.protocol_name, mode=0):
+        try:
+            url = get_github_path(args.protocol_name)
+            git.clone_repository(url = url, path = f"./{args.protocol_name}", checkout_branch="agent-testing")
+
+        except ValueError:
             return f"Protocol '{args.protocol_name}' retrieved"
+
+        except git.GitError as e:
+            raise Exception(f"Git encountered an error: {e}")
         
-        subprocess.run(['git','switch','main'], check=True, shell=True)
-        subprocess.run(f"git clone {get_github_path(args.protocol_name)}", shell=True, check=True)
-        subprocess.run(['git','switch','agent-testing'], cwd=f'./{args.protocol_name}', check=True, shell=True)
+        except Exception as e:
+            raise Exception(f"An unexpected exception occurred while retrieving protocol. Ensure that the protocol name is valid. Error msg: {e}")
 
         return f"Protocol '{args.protocol_name}' retrieved"
-    
-    except Exception as e:
-        raise Exception(f"An unexpected exception occurred while retrieving protocol. Ensure that the protocol name is valid. Error msg: {e}")
     
 @server.tool(description="Ask the user to specify the protocol to perform actions on")
 async def specify_protocol(ctx: Context = CurrentContext()):
@@ -58,27 +58,32 @@ async def specify_protocol(ctx: Context = CurrentContext()):
     
 @server.tool(description="Build a protocol to prepare for a save and/or release")
 async def build_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentContext()):
-
-    if not os.access(args.protocol_name, mode=0):
-        return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
     
     repo_dir = f'{os.getcwd()}/{args.protocol_name}'
 
     try:
-        subprocess.run(["python", "make/scripts/sessions.py"], cwd=repo_dir, check=True)
-        await ctx.report_progress(progress=40,total=100)
-        subprocess.run(["python", "make/scripts/surveys.py"], cwd=repo_dir, check=True)
-        await ctx.report_progress(progress=45,total=100)
-        if os.access(f'{repo_dir}/make/scripts/resources.py', mode=0): subprocess.run(["python","make/scripts/resources.py"], cwd=repo_dir, check=True)
+        repo = git.Repository(path = repo_dir)
 
-        src = f"{repo_dir}/make/~out"
-        dst = f"{repo_dir}/src/flows"
-        shutil.copytree(src, dst, dirs_exist_ok=True)
-        await ctx.report_progress(progress=60,total=100)
-    
+    except git.GitError:
+        raise Exception(f"Protocol not found at path {repo_dir}. Use `get_protocol` first.")
+
+    try:    
         # get git diff and create changenotes
-        git_diff_bytes = subprocess.run( ['git','diff','--diff-algorithm','minimal','--','make/CSV', 'make/scripts', ':(exclude)src/flows', ':(exclude)make/~out'], cwd=repo_dir, capture_output=True, check=True).stdout
-        git_diff = bytes.decode(git_diff_bytes, "utf-8", errors="ignore")
+        diff = repo.diff()
+
+        git_diff = ""
+
+        for obj in diff:
+            if type(obj) == git.Patch:
+                print(f"Found a patch for file {obj.delta.new_file.path}")
+                for hunk in obj.hunks:
+                    for line in hunk.lines:
+                        # The new_lineno represents the new location of the line after the patch. If it's -1, the line has been deleted.
+                        if line.new_lineno == -1: 
+                            git_diff += f"[removal line {line.old_lineno}] {line.content.strip()}\n"
+                        # Similarly, if a line did not previously have a place in the file, it's been added fresh. 
+                        if line.old_lineno == -1: 
+                            git_diff += f"[addition line {line.new_lineno}] {line.content.strip()}\n" 
 
         await ctx.set_state(key=f'release notes {args.protocol_name}', value='')
 
@@ -92,8 +97,6 @@ async def build_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCon
         release_notes = release_notes_result.text
 
         await ctx.set_state(key = f'release notes {args.protocol_name}', value = release_notes)
-        await ctx.report_progress(progress=75,total=100)
-
 
         commit_message_result = await ctx.sample(
             messages = f"Here are some change notes: {release_notes}" 
@@ -105,12 +108,23 @@ async def build_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCon
 
         await ctx.set_state(key = f'commit message {args.protocol_name}', value = commit_message_result.text)
 
-        await ctx.report_progress(progress=100,total=100)
+        # Build JSON last so git diff is not too long          
+        subprocess.run(["python", "make/scripts/sessions.py"], cwd=repo_dir, check=True)
+        await ctx.report_progress(progress=40,total=100)
+        subprocess.run(["python", "make/scripts/surveys.py"], cwd=repo_dir, check=True)
+        await ctx.report_progress(progress=45,total=100)
+        if os.access(f'{repo_dir}/make/scripts/resources.py', mode=0): subprocess.run(["python","make/scripts/resources.py"], cwd=repo_dir, check=True)
+
+        src = f"{repo_dir}/make/~out"
+        dst = f"{repo_dir}/src/flows"
+        shutil.copytree(src, dst, dirs_exist_ok=True)
 
         return f"Built {args.protocol_name} succesfully"
 
     except subprocess.CalledProcessError as e:
         raise Exception(f"Build failed due to subprocess error. Error message: {e}")
+    except git.GitError as e:
+        raise Exception(f"Build failed due to error while generating Git diff. Error message: {e}")
     except Exception as e:
         raise Exception(f"Build failed due to unexpected exception. Error message: {e}")
     
@@ -120,24 +134,57 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCont
     # commit and push changes
     repo_dir = f'{os.getcwd()}/{args.protocol_name}'
 
-    if not os.access(repo_dir, mode=0):
-        return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
+    try:
+        repo = git.Repository(path = repo_dir)
+
+    except git.GitError:
+        raise Exception(f"Protocol not found at path {repo_dir}. Use `get_protocol` first.")
 
     commit_message = await ctx.get_state(f'commit message {args.protocol_name}')
     release_notes = await ctx.get_state(f'release notes {args.protocol_name}')
 
     if not commit_message or not release_notes:
-        return "No commit message or release notes found. Run `build_protocol` before saving."
+        raise Exception("No commit message or release notes found. Run `build_protocol` before saving.")
     
     try:
 
-        subprocess.run(['git','switch','agent-testing'], cwd=repo_dir, check=True)
-        subprocess.run(['git', 'add', '-A'], cwd=repo_dir, check=True)
-        subprocess.run(["git", "commit", "-m", f"{commit_message}", "-m", f"{release_notes}"], cwd=repo_dir, check=True)
-        subprocess.run(["git", "push"], cwd=repo_dir, check=True)
+        # git add -a
+        index = repo.index
+        index.add_all()
+        index.write()
 
-    except subprocess.SubprocessError as e:
-        raise Exception(f"Failed to save due to subprocess error. Error message: {e}")
+        # git commit
+        ref = repo.head.name
+        author = git.Signature(name = "Digital Trails Auto-Commit Bot", email="placeholder@digitaltrails.org")
+        committer = git.Signature(name = "Digital Trails Auto-Commit Bot", email="placeholder@digitaltrails.org")
+
+        message = f"""{await ctx.get_state(f'commit message {args.protocol_name}')}
+
+        {await ctx.get_state(f'release notes {args.protocol_name}')}
+        """
+
+        tree = index.write_tree()
+        parents = [repo.head.target]
+
+        commit = repo.create_commit(ref, author, committer, message, tree, parents)
+
+        # Bare 'X.Y.Z'; create_tag adds the refs/tags/ prefix itself.
+        tag_name = next_tag(repo)
+
+        repo.create_tag(
+            name = tag_name,
+            oid = commit,
+            type = git.enums.ObjectType.COMMIT,
+            tagger = author,
+            message = f"{release_notes}"
+        )
+
+        # git push
+        remote = repo.remotes["origin"]
+        remote.push(['refs/heads/agent-testing', f'refs/tags/{tag_name}'], callbacks=GITHUB_CREDENTIALS)
+
+    except git.GitError as e:
+        raise Exception(f"Failed to save due to git error. Error message: {e}")
 
     return(f"Successfuly saved {args.protocol_name}")
 
