@@ -6,9 +6,8 @@ import tool_args
 import os
 import shutil
 import requests
-import json
 import pandas
-from utils import _check_python_syntax, _numbered_excerpt, _validate_semver, get_github_url, next_tag, get_repo_owner
+from utils import _check_python_syntax, _numbered_excerpt, get_github_url, increment_tag, get_repo_owner
 import pygit2 as git
 
 load_dotenv("keys.env")
@@ -19,7 +18,6 @@ userpass = git.UserPass(
 )
 
 GITHUB_CREDENTIALS = git.RemoteCallbacks(credentials=userpass)
-
 
 
 server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test")
@@ -110,9 +108,7 @@ async def build_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCon
 
         # Build JSON last so git diff is not too long          
         subprocess.run(["python", "make/scripts/sessions.py"], cwd=repo_dir, check=True)
-        await ctx.report_progress(progress=40,total=100)
         subprocess.run(["python", "make/scripts/surveys.py"], cwd=repo_dir, check=True)
-        await ctx.report_progress(progress=45,total=100)
         if os.access(f'{repo_dir}/make/scripts/resources.py', mode=0): subprocess.run(["python","make/scripts/resources.py"], cwd=repo_dir, check=True)
 
         src = f"{repo_dir}/make/~out"
@@ -168,23 +164,12 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCont
 
         commit = repo.create_commit(ref, author, committer, message, tree, parents)
 
-        # Bare 'X.Y.Z'; create_tag adds the refs/tags/ prefix itself.
-        tag_name = next_tag(repo)
-
-        repo.create_tag(
-            name = tag_name,
-            oid = commit,
-            type = git.enums.ObjectType.COMMIT,
-            tagger = author,
-            message = f"{release_notes}"
-        )
-
         # git push
         remote = repo.remotes["origin"]
-        remote.push(['refs/heads/agent-testing', f'refs/tags/{tag_name}'], callbacks=GITHUB_CREDENTIALS)
+        remote.push(['refs/heads/agent-testing'], callbacks=GITHUB_CREDENTIALS)
 
     except git.GitError as e:
-        raise Exception(f"Failed to save due to git error. Error message: {e}")
+        raise RuntimeError(f"Failed to save due to git error.") from e
 
     return(f"Successfuly saved {args.protocol_name}")
 
@@ -195,7 +180,7 @@ async def release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentC
         releases_response = requests.get(
             f"https://api.github.com/repos/{get_repo_owner(args.protocol_name)}/releases",
             headers={
-                "Authorization": f"Bearer {os.getenv('GITHUB_PAT')}",
+                "Authorization": f"Bearer {os.getenv('LEIA_PAT')}",
                 "Accept": "application/vnd.github+json",
             },
             params={"per_page": 1},
@@ -208,20 +193,13 @@ async def release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentC
             last_release_number = "0.0.0"
 
     except requests.HTTPError as e:
-        raise Exception(f"Release failed while fetching the previous release number from GitHub. Error: {e}")
+        raise RuntimeError("Release failed while fetching the previous release number from GitHub") from e
+    
+    except Exception as e:
+        raise RuntimeError("Release failed due to unexpected `requests` error.") from e
 
     release_notes = await ctx.get_state(f'release notes {args.protocol_name}')
-
-    release_number_result = await ctx.sample(
-        messages=f"The previous release was numbered {last_release_number}. The release notes are: {release_notes}. Based on the previous release number and description, give the new semantic versioning number. Normally, only the `patch` number should be incremented. If there are significant changes, you may increment the `minor` number. Never increment the `major` version number unless specifically instructed.",
-        system_prompt="Only provide the semantic versioning number and nothing else.",
-        temperature=0,
-        max_tokens=5
-    )
-
-    new_release_number, semver_validation_error = _validate_semver(release_number_result.text) #type: ignore
-    if semver_validation_error:
-        raise Exception(f"Release failed due to invalid semantic versioning number. Error: {semver_validation_error}")
+    new_release_number = increment_tag(last_release_number)
 
     isPrerelease = await ctx.elicit(
         message="Mark as prerelease?",
@@ -233,19 +211,23 @@ async def release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentC
         requests.post(
             f"https://api.github.com/repos/{get_repo_owner(args.protocol_name)}/releases",
             headers={
-                "Authorization": f"Bearer {os.getenv('GITHUB_PAT')}",
+                "Authorization": f"Bearer {os.getenv('LEIA_PAT')}",
                 "Accept": "application/vnd.github+json",
             },
             json={
                 "tag_name": new_release_number,
                 "name": new_release_number,
+                "target_commitish" : "agent-testing",
                 "body": release_notes,
-                "prerelease": (isPrerelease.action=='accept' and isPrerelease.data.latest_or_prerelease == "prerelease")
+                "prerelease": (isPrerelease.action=='accept' and isPrerelease.data.latest_or_prerelease == "Prerelease")
             },
         ).raise_for_status()
 
     except requests.HTTPError as e:
         raise Exception(f"An error occurred while publishing release to GitHub. Error msg: {e}")
+    
+    except Exception as e:
+        raise RuntimeError("Release failed due to unexpected `requests` error.") from e
 
     return f"{args.protocol_name} released successfully"
 
