@@ -9,6 +9,7 @@ import requests
 import pandas
 from utils import _check_python_syntax, _numbered_excerpt, get_github_url, increment_tag, get_repo_owner
 import pygit2 as git
+from time import perf_counter
 
 load_dotenv("keys.env")
 
@@ -73,7 +74,6 @@ async def build_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCon
 
         for obj in diff:
             if type(obj) == git.Patch:
-                print(f"Found a patch for file {obj.delta.new_file.path}")
                 for hunk in obj.hunks:
                     for line in hunk.lines:
                         # The new_lineno represents the new location of the line after the patch. If it's -1, the line has been deleted.
@@ -86,7 +86,7 @@ async def build_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCon
         await ctx.set_state(key=f'release notes {args.protocol_name}', value='')
 
         release_notes_result = await ctx.sample(
-            messages=f"Review this git diff and write concise and accurate release notes: {git_diff}",
+            messages=f"Review this git diff and write concise and accurate release notes: {git_diff[0:10000]} (showing first 10000 characters)",
             system_prompt="Provide a bulleted list. Be brief",
             temperature=0.5,
             max_tokens=350
@@ -146,7 +146,11 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCont
 
         # git add -a
         index = repo.index
-        index.add_all()
+        status = repo.status(untracked_files='all')
+
+        for path in status:
+            index.add(path)
+
         index.write()
 
         # git commit
