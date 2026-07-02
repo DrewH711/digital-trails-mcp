@@ -158,9 +158,54 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCont
         author = git.Signature(name = "Digital Trails Auto-Commit Bot", email="placeholder@digitaltrails.org")
         committer = git.Signature(name = "Digital Trails Auto-Commit Bot", email="placeholder@digitaltrails.org")
 
-        message = f"""{await ctx.get_state(f'commit message {args.protocol_name}')}
+        message = f"""{commit_message}
 
-        {await ctx.get_state(f'release notes {args.protocol_name}')}
+        {release_notes}
+        """
+
+        tree = index.write_tree()
+        parents = [repo.head.target]
+
+        commit = repo.create_commit(ref, author, committer, message, tree, parents)
+
+        # git push
+        remote = repo.remotes["origin"]
+        remote.push(['refs/heads/agent-testing'], callbacks=GITHUB_CREDENTIALS)
+
+    except git.GitError as e:
+        raise RuntimeError(f"Failed to save due to git error.") from e
+
+    return(f"Successfuly saved {args.protocol_name}")
+
+@server.tool(description="Manually write release title and notes when releasing protocol. Not for LLM Agents - direct http requests only")
+async def save_protocol_custom_notes(args: tool_args.protocolArgs, commit_message: str, release_notes: str):
+    repo_dir = f'{os.getcwd()}/{args.protocol_name}'
+
+    try:
+        repo = git.Repository(path = repo_dir)
+
+    except git.GitError:
+        raise Exception(f"Protocol not found at path {repo_dir}. Use `get_protocol` first.")
+    
+    try:
+
+        # git add -a
+        index = repo.index
+        status = repo.status(untracked_files='all')
+
+        for path in status:
+            index.add(path)
+
+        index.write()
+
+        # git commit
+        ref = repo.head.name
+        author = git.Signature(name = "Digital Trails Auto-Commit Bot", email="placeholder@digitaltrails.org")
+        committer = git.Signature(name = "Digital Trails Auto-Commit Bot", email="placeholder@digitaltrails.org")
+
+        message = f"""{commit_message}
+
+        {release_notes}
         """
 
         tree = index.write_tree()
@@ -461,4 +506,4 @@ def find_and_replace_in_csv(args: tool_args.findAndReplaceArgs):
 
 
 if __name__ == '__main__':
-    server.run(transport="streamable-http")
+    server.run(transport="http")
