@@ -42,13 +42,13 @@ def _numbered_excerpt(lines: list[str], start: int, end: int) -> str:
         rendered.append(f"{i}\t{text}")
     return "\n".join(rendered)
 
-def get_github_path(protocol: tool_args.available_protocols) -> str:
+def get_github_url(protocol: tool_args.available_protocols) -> str:
     if protocol in ["mindtrails_movement", "mindtrails_spanish"]:
         return f"https://github.com/TeachmanLab/{protocol}"
     else:
         return f"https://github.com/digital-trails/{protocol}"
     
-def get_owner_repo(protocol: tool_args.available_protocols) -> str:
+def get_repo_owner(protocol: tool_args.available_protocols) -> str:
     if protocol in ["mindtrails_movement", "mindtrails_spanish"]:
         return f"TeachmanLab/{protocol}" 
     else:

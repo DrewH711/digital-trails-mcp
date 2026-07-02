@@ -8,7 +8,7 @@ import shutil
 import requests
 import json
 import pandas
-from utils import _check_python_syntax, _numbered_excerpt, _validate_semver, get_github_path, next_tag
+from utils import _check_python_syntax, _numbered_excerpt, _validate_semver, get_github_url, next_tag, get_repo_owner
 import pygit2 as git
 
 load_dotenv("keys.env")
@@ -28,7 +28,7 @@ server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from 
 def get_protocol(args: tool_args.protocolArgs):
     
         try:
-            url = get_github_path(args.protocol_name)
+            url = get_github_url(args.protocol_name)
             git.clone_repository(url = url, path = f"./{args.protocol_name}", checkout_branch="agent-testing")
 
         except ValueError:
@@ -193,7 +193,7 @@ async def release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentC
     # create new release number and push release
     try:
         releases_response = requests.get(
-            f"https://api.github.com/repos/{get_owner_repo(args.protocol_name)}/releases",
+            f"https://api.github.com/repos/{get_repo_owner(args.protocol_name)}/releases",
             headers={
                 "Authorization": f"Bearer {os.getenv('GITHUB_PAT')}",
                 "Accept": "application/vnd.github+json",
@@ -231,7 +231,7 @@ async def release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentC
     # must use GitHub REST API to publish releases because it cannot be done via command line
     try:
         requests.post(
-            f"https://api.github.com/repos/{get_owner_repo(args.protocol_name)}/releases",
+            f"https://api.github.com/repos/{get_repo_owner(args.protocol_name)}/releases",
             headers={
                 "Authorization": f"Bearer {os.getenv('GITHUB_PAT')}",
                 "Accept": "application/vnd.github+json",
