@@ -10,6 +10,8 @@ import pandas
 from utils import _check_python_syntax, _numbered_excerpt, get_github_url, increment_tag, get_repo_owner
 import pygit2 as git
 from time import perf_counter
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 
 load_dotenv("keys.env")
 
@@ -22,6 +24,21 @@ GITHUB_CREDENTIALS = git.RemoteCallbacks(credentials=userpass)
 
 
 server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test")
+
+middleware = [
+    Middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Allow all origins; use specific origins for security
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "mcp-protocol-version",
+            "mcp-session-id",
+            "Authorization",
+            "Content-Type",
+        ],
+        expose_headers=["mcp-session-id"],
+    )
+]
 
 @server.tool(description="Clone a protocol into the current directory so it can be read and modified")
 def get_protocol(args: tool_args.protocolArgs):
@@ -506,4 +523,4 @@ def find_and_replace_in_csv(args: tool_args.findAndReplaceArgs):
 
 
 if __name__ == '__main__':
-    server.run(transport="http")
+    server.run(transport="streamable-http", middleware=middleware)
