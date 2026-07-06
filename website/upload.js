@@ -8,6 +8,9 @@ function clearMessage(){
     document.getElementById("messages").textContent = "";
 }
 
+window.showMessage = showMessage;
+window.clearMessage = clearMessage;
+
 document.getElementById("protocol").addEventListener("change", () => {
     clearMessage();
     const protocol = document.getElementById("protocol").value;

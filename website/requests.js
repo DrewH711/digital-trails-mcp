@@ -59,10 +59,44 @@ async function deployProtocol(protocol, files){
     );
 
     //replace CSV files
+    for (const [filename, contents] of Object.entries(fileContents)) {
+
+        await send(
+            "tools/call", {
+                "name":"swap_csv",
+                "arguments": {
+                    "args":{
+                        "protocol_name":protocol,
+                        "file_name":filename,
+                        "content":contents
+                    }
+                }
+            },
+            3,
+            mcpSessionID
+        );
+    }
 
     //build/save/release
-    if (get_protocol.ok) console.log("success i think");
-    console.log(`body: ${get_protocol.body}`)
+
+    const buildSaveRelease = await send(
+        "tools/call", {
+            "name":"build_save_and_release_protocol",
+            "arguments": {
+                "args": {
+                    "protocol_name":protocol
+                }
+            }
+        },
+        4,
+        mcpSessionID
+    );
+
+    if(buildSaveRelease.ok){
+        console.log(`successfully built and released ${protocol}`)
+        window.clearMessage();
+        window.showMessage("Successfully deployed", "green");
+    }
 
 }
 
