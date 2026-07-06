@@ -87,7 +87,7 @@ document.getElementById("fileProtocolForm").addEventListener("submit", async (e)
 
         }
 
-        await window.uploadFiles(protocol, fileContents);
+        await window.deployProtocol(protocol, fileContents);
     }
     
 )
