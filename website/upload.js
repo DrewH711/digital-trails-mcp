@@ -1,8 +1,120 @@
-document.getElementById("fileProtocolForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const files = document.getElementById("fileinput").files;
-    const protocol = document.getElementById("protocol").value;
-    console.log(protocol)
+function showError(errorMessage){
+    document.getElementById("errorMessages").innerHTML = `<span style='color: red;'>Error: ${errorMessage}</span>`
+}
 
-    
+function clearError(){
+    document.getElementById("errorMessages").innerHTML = "";
+}
+
+document.getElementById("protocol").addEventListener("change", () => {
+    clearError();
+    const protocol = document.getElementById("protocol").value;
+
+    let fileSchemeText = '';
+
+    allowedCSVNames[protocol].forEach(element => {
+        fileSchemeText += `${element}<br>`
+    });
+
+    document.getElementById("protocolInfo").innerHTML = `File naming scheme for ${document.getElementById(protocol).textContent}:<br><br>${fileSchemeText}`;
 })
+
+document.getElementById("fileinput").addEventListener("change", (e) => {
+    clearError();
+    const protocol = document.getElementById("protocol").value;
+    if(protocol!==""){
+
+        const files = e.target.files;
+        console.log(files)
+
+        for(let i=0; i<files.length;i++){
+            file = files.item(i);
+
+            allowedNames = allowedCSVNames[protocol]
+
+            if( !(allowedNames.includes(file.name)) ) {
+                showError(`${file['name']} does not match the naming scheme for ${document.getElementById(protocol).innerText}. Please refer to the naming scheme below.`)
+
+                document.getElementById("fileProtocolForm").reset();
+                document.getElementById("protocol").value = protocol;
+                break;
+            }
+        }
+    }
+
+    else{
+        showError("Please select a protocol before uploading CSV files");
+        document.getElementById("fileProtocolForm").reset();
+    }
+})
+
+const allowedCSVNames = {
+    "protocol-leia": [
+        "LEIA Interventions, Resources, and Tips - Long Scenarios.csv",
+        "LEIA Interventions, Resources, and Tips - Resources.csv",
+        "LEIA Interventions, Resources, and Tips - Short Scenarios.csv",
+        "LEIA Interventions, Resources, and Tips - Strategies.csv",
+        "LEIA Interventions, Resources, and Tips - Surveys.csv",
+        "LEIA Interventions, Resources, and Tips - Tips.csv",
+        "LEIA long scenarios structure.csv",
+        "dose1_scenarios - HTC.csv",
+        "images.csv"
+    ],
+
+    "protocol-uma": [
+        "Discrimination.csv",
+        "ER Strategies.csv",
+        "Final Long Scenarios.csv",
+        "Resources for On-Demand Library.csv",
+        "UMA Resources.csv",
+        "dose1_scenarios.csv",
+        "htc_long_scenarios_structure.csv",
+        "lessons_learned_text.csv",
+        "short_scenarios.csv",
+        "survey_questions.csv",
+        "tips.csv",
+        "write_your_own.csv"
+    ],
+
+    "mindtrails_spanish": [
+        "Discrimination.csv",
+        "ER_Strategies.csv",
+        "MTSpanish_on-demand.csv",
+        "MTSpanish_survey_questions.csv",
+        "Reminders.csv",
+        "Spanish Images.csv",
+        "Spanish htc_long_scenarios_structure.csv",
+        "Spanish lessons_learned_text.csv",
+        "Spanish_Long_Scenarios.csv",
+        "Spanish_Resources.csv",
+        "Spanish_Short_Scenarios.csv",
+        "Spanish_dose1_scenarios.csv",
+        "Spanish_write_your_own.csv",
+        "tips.csv"
+    ],
+
+    "mindtrails_movement": [
+        "MT Movement Final Long Scenarios - MTM Long Scenarios-HD FOR APP.csv",
+        "MT Movement Final Long Scenarios - MTM Long Scenarios-PD FOR APP.csv",
+        "MT Movement Ranked Statements and Tips (post-session recommendations) - ER Strategies- HD.csv",
+        "MT Movement Ranked Statements and Tips (post-session recommendations) - ER Strategies- PD.csv",
+        "MT Movement Ranked Statements and Tips (post-session recommendations) - New HD Motivational Statements.csv",
+        "MT Movement Ranked Statements and Tips (post-session recommendations) - New PD Motivational Statements.csv",
+        "MT Movement Ranked Statements and Tips (post-session recommendations) - Tips to Apply Lessons Learned.csv",
+        "MT Movement Resources for On-Demand Library - HD Resources.csv",
+        "MT Movement Resources for On-Demand Library - PD Resources.csv",
+        "MTM Discrimination - MTM (HD).csv",
+        "MTM Discrimination - MTM (PD).csv",
+        "MTM Short Scenarios by Session - Images.csv",
+        "MTM Short Scenarios by Session - MTM HD Final for app_old.csv",
+        "MTM Short Scenarios by Session - MTM PD Final for app_old.csv",
+        "MTM dose1_scenarios.csv",
+        "MTM lessons_learned_text - HD.csv",
+        "MTM lessons_learned_text - PD.csv",
+        "MTM_long_scenarios_structure.csv",
+        "MTM_survey_questions - Final_HD MTM_survey_questions.csv",
+        "MTM_survey_questions - Final_PD MTM_survey_questions.csv",
+        "MTM_write_your_own.csv",
+        "Reminders.csv"
+    ]
+}

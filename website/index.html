@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Digital Trails Autodeploy</title>
 <script src="requests.js" defer></script>
+<script src="upload.js" defer></script>
 </head>
 
 <body>
@@ -13,12 +14,14 @@
         <input type="file" id="fileinput" name="uploadedFiles" multiple="true" accept=".csv" required>
         <select name="protocol" id="protocol" required>
             <option value="" selected hidden>--Select a Protocol--</option>
-            <option value="protocol-leia">LEIA</option>
-            <option value="protocol-uma">UMA</option>
-            <option value="mindtrails_movement">Mindtrails Movement</option>
-            <option value="mindtrails_spanish">Mindtrails Spanish</option>
+            <option id="protocol-leia" value="protocol-leia">LEIA</option>
+            <option id="protocol-uma" value="protocol-uma">UMA</option>
+            <option id="mindtrails_movement" value="mindtrails_movement">Mindtrails Movement</option>
+            <option id="mindtrails_spanish" value="mindtrails_spanish">Mindtrails Spanish</option>
         </select>
-        <button type="submit">Upload</button>
+        <button type="submit">Upload</button><br><br>
+        <div id="errorMessages"></div>
+        <div id="protocolInfo">Please select a protocol</div>
     </form>
 </body>
 
