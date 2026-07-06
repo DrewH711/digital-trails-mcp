@@ -23,11 +23,9 @@ async function send(mcpMethod, params, requestID=null, mcpSessionID=null){
 
 const url = "http://localhost:8000/mcp";
 
-document.getElementById("fileProtocolForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const protocol = document.getElementById("protocol").value;
-    // initialize
+async function deployProtocol(protocol, files){
 
+    //initialize
     const init = await send(
         "initialize", {
 
@@ -40,11 +38,13 @@ document.getElementById("fileProtocolForm").addEventListener("submit", async (e)
     let mcpSessionID = init.headers.get('mcp-session-id');
     console.log(`mcp session ID recieved successfully: ${mcpSessionID}`);
 
+    //initialized notification
     const initialized = await send("notifications/initialized", {}, null, mcpSessionID);
 
     if (initialized.ok) console.log("initialized notification sent");
     else console.log("initialized notification failed")
 
+    //ensure protocol_existence
     const get_protocol = await send(
         "tools/call", {
             "name":"get_protocol",
@@ -58,13 +58,12 @@ document.getElementById("fileProtocolForm").addEventListener("submit", async (e)
         mcpSessionID
     );
 
+    //replace CSV files
+
+    //build/save/release
     if (get_protocol.ok) console.log("success i think");
     console.log(`body: ${get_protocol.body}`)
 
-    // replace CSV files
+}
 
-    // Release
-    
-    }
-
-)
+window.deployProtocol = deployProtocol;

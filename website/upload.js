@@ -1,13 +1,15 @@
-function showError(errorMessage){
-    document.getElementById("errorMessages").innerHTML = `<span style='color: red;'>Error: ${errorMessage}</span>`
+function showMessage(message, color='black'){
+    messageDisplay = document.getElementById("messages");
+    messageDisplay.textContent = message;
+    messageDisplay.style.color = color;
 }
 
-function clearError(){
-    document.getElementById("errorMessages").innerHTML = "";
+function clearMessage(){
+    document.getElementById("messages").textContent = "";
 }
 
 document.getElementById("protocol").addEventListener("change", () => {
-    clearError();
+    clearMessage();
     const protocol = document.getElementById("protocol").value;
 
     let fileSchemeText = '';
@@ -19,34 +21,76 @@ document.getElementById("protocol").addEventListener("change", () => {
     document.getElementById("protocolInfo").innerHTML = `File naming scheme for ${document.getElementById(protocol).textContent}:<br><br>${fileSchemeText}`;
 })
 
+//validate files on change
+let filesValid = false;
 document.getElementById("fileinput").addEventListener("change", (e) => {
-    clearError();
+    clearMessage();
     const protocol = document.getElementById("protocol").value;
     if(protocol!==""){
 
         const files = e.target.files;
         console.log(files)
 
-        for(let i=0; i<files.length;i++){
+        
+        
+        for(let i=0; i<files.length; i++){
             file = files.item(i);
-
             allowedNames = allowedCSVNames[protocol]
-
+            
             if( !(allowedNames.includes(file.name)) ) {
-                showError(`${file['name']} does not match the naming scheme for ${document.getElementById(protocol).innerText}. Please refer to the naming scheme below.`)
-
+                showMessage(`Error: ${file.name} does not match the naming scheme for ${document.getElementById(protocol).innerText}. Please refer to the naming scheme below.`, "red")
                 document.getElementById("fileProtocolForm").reset();
                 document.getElementById("protocol").value = protocol;
-                break;
+                return;
             }
+
         }
+
     }
 
     else{
-        showError("Please select a protocol before uploading CSV files");
+        showMessage("Error: Please select a protocol before uploading CSV files", "red");
         document.getElementById("fileProtocolForm").reset();
+        return;
     }
+
 })
+
+//deploy on file submission
+document.getElementById("fileProtocolForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const protocol = document.getElementById("protocol").value;
+    const files = document.getElementById("fileinput").files;
+
+    if(files.length===0){
+        showMessage("Error: no files uploaded", "red");
+        return;
+    }
+
+    //get file contents and call deploy function from requests.js
+
+    let fileContents = {};
+
+    for(i=0;i<files.length;i++){
+        reader = new FileReader();
+
+        reader.onload = () => {
+            fileContents[file.name] = reader.result;
+        }
+        reader.onerror = () =>{
+            showMessage(`Error: Could not read file ${file.name}. Please try again`, "red");
+            document.getElementById("fileProtocolForm").reset();
+            document.getElementById("protocol").value = protocol;
+            return;
+        }
+        reader.readAsText(file);
+
+        }
+
+        await window.uploadFiles(protocol, fileContents);
+    }
+    
+)
 
 const allowedCSVNames = {
     "protocol-leia": [
