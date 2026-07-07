@@ -10,15 +10,17 @@
 <body>
     <h1>Digital Trails Autodeploy</h1><br>
     <form id="fileProtocolForm" enctype="multipart/form-data">
-        <label for="fileinput">Upload CSV Files</label>
-        <input type="file" id="fileinput" name="uploadedFiles" multiple="true" accept=".csv" required>
         <select name="protocol" id="protocol" required>
             <option value="" selected hidden>--Select a Protocol--</option>
             <option id="protocol-leia" value="protocol-leia">LEIA</option>
             <option id="protocol-uma" value="protocol-uma">UMA</option>
             <option id="mindtrails_movement" value="mindtrails_movement">Mindtrails Movement</option>
             <option id="mindtrails_spanish" value="mindtrails_spanish">Mindtrails Spanish</option>
-        </select>
+        </select><br><br>
+        <input type="text" id="commitmessage" name="commitmessage" placeholder="Enter a commit message for this release" required><br><br>
+        <input type="text" id="releasenotes" name="releasenotes" placeholder="Add release notes"><br><br>
+        <label for="fileinput"></label>
+        <input type="file" id="fileinput" name="uploadedFiles" multiple="true" accept=".csv" required><br><br>
         <button type="submit">Deploy</button><br><br>
         <div id="messages"></div>
         <div id="protocolInfo">Please select a protocol</div>

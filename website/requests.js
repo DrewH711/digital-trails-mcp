@@ -23,7 +23,7 @@ async function send(mcpMethod, params, requestID=null, mcpSessionID=null){
 
 const url = "http://localhost:8000/mcp";
 
-async function deployProtocol(protocol, files){
+async function deployProtocol(protocol, fileContents, commitMessage, releaseNotes){
 
     //initialize
     const init = await send(
@@ -77,11 +77,10 @@ async function deployProtocol(protocol, files){
         );
     }
 
-    //build/save/release
-
-    const buildSaveRelease = await send(
+    //build
+    const build = await send(
         "tools/call", {
-            "name":"build_save_and_release_protocol",
+            "name":"build_protocol",
             "arguments": {
                 "args": {
                     "protocol_name":protocol
@@ -92,7 +91,37 @@ async function deployProtocol(protocol, files){
         mcpSessionID
     );
 
-    if(buildSaveRelease.ok){
+    //save with notes
+    const saveWithNotes = await send(
+        "tools/call", {
+            "name":"save_protocol_custom_notes",
+            "arguments": {
+                "args": {
+                    "protocol_name":protocol
+                },
+                "commit_message" : commitMessage,
+                "release_notes" : releaseNotes
+            }
+        },
+        5,
+        mcpSessionID
+    );
+
+    //release
+    const release = await send(
+        "tools/call", {
+            "name":"release_protocol",
+            "arguments": {
+                "args": {
+                    "protocol_name":protocol
+                }
+            }
+        },
+        6,
+        mcpSessionID
+    );
+
+    if(release.ok){
         console.log(`successfully built and released ${protocol}`)
         window.clearMessage();
         window.showMessage("Successfully deployed", "green");

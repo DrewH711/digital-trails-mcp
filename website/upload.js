@@ -64,6 +64,8 @@ document.getElementById("fileProtocolForm").addEventListener("submit", async (e)
     e.preventDefault();
     const protocol = document.getElementById("protocol").value;
     const files = document.getElementById("fileinput").files;
+    const commitMessage = document.getElementById("commitmessage").value;
+    const releaseNotes = document.getElementById("releasenotes").value;
 
     if(files.length===0){
         showMessage("Error: no files uploaded", "red");
@@ -90,7 +92,7 @@ document.getElementById("fileProtocolForm").addEventListener("submit", async (e)
 
         }
 
-        await window.deployProtocol(protocol, fileContents);
+        await window.deployProtocol(protocol, fileContents, commitMessage, releaseNotes);
     }
     
 )
