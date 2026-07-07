@@ -73,7 +73,7 @@ async def specify_protocol(ctx: Context = CurrentContext()):
     
     
 @server.tool(description="Build a protocol to prepare for a save and/or release")
-async def build_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentContext()):
+async def build_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
     
     repo_dir = f'{os.getcwd()}/{args.protocol_name}'
 
@@ -83,46 +83,60 @@ async def build_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCon
     except git.GitError:
         raise Exception(f"Protocol not found at path {repo_dir}. Use `get_protocol` first.")
 
-    try:    
-        # get git diff and create changenotes
-        diff = repo.diff()
+    if(args.release_message and args.release_notes):
+        await ctx.set_state(key=f'release notes {args.protocol_name}', value=args.release_notes)
+        await ctx.set_state(key = f'commit message {args.protocol_name}', value = args.release_message)
 
-        git_diff = ""
+    else:
+        try:    
+            # get git diff and create changenotes
+            diff = repo.diff()
 
-        for obj in diff:
-            if type(obj) == git.Patch:
-                for hunk in obj.hunks:
-                    for line in hunk.lines:
-                        # The new_lineno represents the new location of the line after the patch. If it's -1, the line has been deleted.
-                        if line.new_lineno == -1: 
-                            git_diff += f"[removal line {line.old_lineno}] {line.content.strip()}\n"
-                        # Similarly, if a line did not previously have a place in the file, it's been added fresh. 
-                        if line.old_lineno == -1: 
-                            git_diff += f"[addition line {line.new_lineno}] {line.content.strip()}\n" 
+            git_diff = ""
 
-        await ctx.set_state(key=f'release notes {args.protocol_name}', value='')
+            for obj in diff:
+                if type(obj) == git.Patch:
+                    for hunk in obj.hunks:
+                        for line in hunk.lines:
+                            # The new_lineno represents the new location of the line after the patch. If it's -1, the line has been deleted.
+                            if line.new_lineno == -1: 
+                                git_diff += f"[removal line {line.old_lineno}] {line.content.strip()}\n"
+                            # Similarly, if a line did not previously have a place in the file, it's been added fresh. 
+                            if line.old_lineno == -1: 
+                                git_diff += f"[addition line {line.new_lineno}] {line.content.strip()}\n" 
 
-        release_notes_result = await ctx.sample(
-            messages=f"Review this git diff and write concise and accurate release notes: {git_diff[0:10000]} (showing first 10000 characters)",
-            system_prompt="Provide a bulleted list. Be brief",
-            temperature=0.5,
-            max_tokens=350
-        )
-    
-        release_notes = release_notes_result.text
+            await ctx.set_state(key=f'release notes {args.protocol_name}', value='')
 
-        await ctx.set_state(key = f'release notes {args.protocol_name}', value = release_notes)
+            release_notes_result = await ctx.sample(
+                messages=f"Review this git diff and write concise and accurate release notes: {git_diff[0:10000]} (showing first 10000 characters)",
+                system_prompt="Provide a bulleted list. Be brief",
+                temperature=0.5,
+                max_tokens=350
+            )
+        
+            release_notes = release_notes_result.text
 
-        commit_message_result = await ctx.sample(
-            messages = f"Here are some change notes: {release_notes}" 
-            "Summarize these into a one-line commit message.",
-            system_prompt="Be descriptive but brief",
-            temperature=0.3,
-            max_tokens=50
-        )
+            await ctx.set_state(key = f'release notes {args.protocol_name}', value = release_notes)
 
-        await ctx.set_state(key = f'commit message {args.protocol_name}', value = commit_message_result.text)
+            commit_message_result = await ctx.sample(
+                messages = f"Here are some change notes: {release_notes}" 
+                "Summarize these into a one-line commit message.",
+                system_prompt="Be descriptive but brief",
+                temperature=0.3,
+                max_tokens=50
+            )
 
+            await ctx.set_state(key = f'commit message {args.protocol_name}', value = commit_message_result.text)
+
+        except ValueError as e:
+            e.add_note("Build failed because client cannot automatically generate release notes. Notes must be entered manually")
+            raise e
+        
+        except Exception as e:
+            e.add_note("Build failed due to unexpected error")
+            raise e
+        
+    try:
         # Build JSON last so git diff is not too long          
         subprocess.run(["python", "make/scripts/sessions.py"], cwd=repo_dir, check=True)
         subprocess.run(["python", "make/scripts/surveys.py"], cwd=repo_dir, check=True)
@@ -142,7 +156,7 @@ async def build_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCon
         raise Exception(f"Build failed due to unexpected exception. Error message: {e}")
     
 @server.tool(description="Save protocol without releasing. Default to this over save and release. Save after building and before releasing.")
-async def save_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentContext()):
+async def save_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
     
     # commit and push changes
     repo_dir = f'{os.getcwd()}/{args.protocol_name}'
@@ -153,56 +167,16 @@ async def save_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentCont
     except git.GitError:
         raise Exception(f"Protocol not found at path {repo_dir}. Use `get_protocol` first.")
 
-    commit_message = await ctx.get_state(f'commit message {args.protocol_name}')
-    release_notes = await ctx.get_state(f'release notes {args.protocol_name}')
+    if(args.release_notes and args.release_message):
+        commit_message = args.release_message
+        release_notes = args.release_notes
 
-    if not commit_message or not release_notes:
-        raise Exception("No commit message or release notes found. Run `build_protocol` before saving.")
-    
-    try:
+    else:
+        commit_message = await ctx.get_state(f'commit message {args.protocol_name}')
+        release_notes = await ctx.get_state(f'release notes {args.protocol_name}')
 
-        # git add -a
-        index = repo.index
-        status = repo.status(untracked_files='all')
-
-        for path in status:
-            index.add(path)
-
-        index.write()
-
-        # git commit
-        ref = repo.head.name
-        author = git.Signature(name = "Digital Trails Auto-Commit Bot", email="placeholder@digitaltrails.org")
-        committer = git.Signature(name = "Digital Trails Auto-Commit Bot", email="placeholder@digitaltrails.org")
-
-        message = f"""{commit_message}
-
-        {release_notes}
-        """
-
-        tree = index.write_tree()
-        parents = [repo.head.target]
-
-        commit = repo.create_commit(ref, author, committer, message, tree, parents)
-
-        # git push
-        remote = repo.remotes["origin"]
-        remote.push(['refs/heads/agent-testing'], callbacks=GITHUB_CREDENTIALS)
-
-    except git.GitError as e:
-        raise RuntimeError(f"Failed to save due to git error.") from e
-
-    return(f"Successfuly saved {args.protocol_name}")
-
-@server.tool(description="Manually write release title and notes when releasing protocol. Not for LLM Agents - direct http requests only")
-async def save_protocol_custom_notes(args: tool_args.protocolArgs, commit_message: str, release_notes: str):
-    repo_dir = f'{os.getcwd()}/{args.protocol_name}'
-
-    try:
-        repo = git.Repository(path = repo_dir)
-
-    except git.GitError:
-        raise Exception(f"Protocol not found at path {repo_dir}. Use `get_protocol` first.")
+        if not commit_message or not release_notes:
+            raise Exception("No commit message or release notes found. Run `build_protocol` before saving.")
     
     try:
 
@@ -240,7 +214,7 @@ async def save_protocol_custom_notes(args: tool_args.protocolArgs, commit_messag
     return(f"Successfuly saved {args.protocol_name}")
 
 @server.tool(description="Create a new release version of this protocol and push it to GitHub. Always build and save first")
-async def release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentContext()):
+async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
     # create new release number and push release
     try:
         releases_response = requests.get(
@@ -264,13 +238,12 @@ async def release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentC
     except Exception as e:
         raise RuntimeError("Release failed due to unexpected `requests` error.") from e
 
-    release_notes = await ctx.get_state(f'release notes {args.protocol_name}')
-    new_release_number = increment_tag(last_release_number)
+    if args.release_notes:
+        release_notes = args.release_notes
+    else:
+        release_notes = await ctx.get_state(f'release notes {args.protocol_name}')
 
-    isPrerelease = await ctx.elicit(
-        message="Mark as prerelease?",
-        response_type=tool_args.latestOrPrerelease
-    )
+    new_release_number = increment_tag(last_release_number)
 
     # must use GitHub REST API to publish releases because it cannot be done via command line
     try:
@@ -285,7 +258,7 @@ async def release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentC
                 "name": new_release_number,
                 "target_commitish" : "agent-testing",
                 "body": release_notes,
-                "prerelease": (isPrerelease.action=='accept' and isPrerelease.data.latest_or_prerelease == "Prerelease")
+                "prerelease": not args.isLatest
             },
         ).raise_for_status()
 
@@ -300,8 +273,14 @@ async def release_protocol(args: tool_args.protocolArgs, ctx: Context = CurrentC
 
 
 @server.tool(description="Create and publish new release for a protocol")
-async def build_save_and_release_protocol(args: tool_args.protocolArgs):
-
+async def build_save_and_release_protocol(args: tool_args.buildSaveReleaseArgs):
+    print(f"""
+    protocol_name: {args.protocol_name}
+    release_message: {args.release_message}
+    release_notes: {args.release_notes}
+    isLatest: {args.isLatest}
+          """)
+    
     if not os.access(args.protocol_name, mode=0):
         return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
     
@@ -309,17 +288,20 @@ async def build_save_and_release_protocol(args: tool_args.protocolArgs):
     # ToolResult with is_error=True), so each stage is wrapped to short-circuit
     # with a clear message instead of falsely reporting success.
     try:
-        await server.call_tool(name="build_protocol", arguments={'args':tool_args.protocolArgs(protocol_name=args.protocol_name)})
+        await server.call_tool(name="build_protocol", arguments={'args':args})
+        print('build done')
     except Exception as e:
         return f"Build failed for {args.protocol_name}. Error: {e}"
 
     try:
-        await server.call_tool(name="save_protocol", arguments={'args':tool_args.protocolArgs(protocol_name=args.protocol_name)})
+        await server.call_tool(name="save_protocol", arguments={'args':args})
+        print('saved')
     except Exception as e:
         return f"Save failed for {args.protocol_name}. Error: {e}"
 
     try:
-        await server.call_tool(name="release_protocol", arguments={'args':tool_args.protocolArgs(protocol_name=args.protocol_name)})
+        await server.call_tool(name="release_protocol", arguments={'args':args})
+        print('released!')
     except Exception as e:
         return f"Release failed for {args.protocol_name}. Error: {e}"
 
@@ -359,7 +341,7 @@ def get_protocol_special_json(args: tool_args.protocolArgs):
 
 @server.tool(description="Replace the contents of an EXISTING CSV file in a protocol's make/CSV directory with uploaded text. Match-existing-names-only: an upload whose file_name has no matching file in the directory is rejected. Used by the web portal to swap in user-supplied CSVs before a build.")
 def swap_csv(args: tool_args.swapCSVArgs):
-
+    
     if not os.access(args.protocol_name, mode=0):
         return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
 

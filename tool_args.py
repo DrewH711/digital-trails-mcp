@@ -195,3 +195,12 @@ class latestOrPrerelease(BaseModel):
     latest_or_prerelease: Literal['Latest','Prerelease'] = Field(
         title="Should this release be marked as latest or as a prerelease?"
     )
+
+class buildSaveReleaseArgs(BaseModel):
+    protocol_name: available_protocols = Field(description="The protocol in use")
+
+    release_message: Optional[str] = Field(default=None, description="A one-line description of the release. Leave blank to let an LLM automatically generate this based on the changes made.")
+
+    release_notes: Optional[str] = Field(default=None, description="A detailed description of the release. Leave blank to let an LLM automatically generate this based on the changes made.")
+
+    isLatest: bool = Field(default=False, description="Whether to mark this release as the latest release. Defaults to false")
