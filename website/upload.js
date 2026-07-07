@@ -8,6 +8,18 @@ function clearMessage(){
     document.getElementById("messages").textContent = "";
 }
 
+function clearFilesFromForm(){
+    const protocol = document.getElementById("protocol").value;
+    const commitMessage = document.getElementById("commitmessage").value;
+    const releaseNotes = document.getElementById("releasenotes").value;
+
+    document.getElementById("fileProtocolForm").reset();
+
+    document.getElementById("protocol").value = protocol;
+    document.getElementById("commitmessage").value = commitMessage;
+    document.getElementById("releasenotes").value = releaseNotes;
+}
+
 window.showMessage = showMessage;
 window.clearMessage = clearMessage;
 
@@ -25,7 +37,6 @@ document.getElementById("protocol").addEventListener("change", () => {
 })
 
 //validate files on change
-let filesValid = false;
 document.getElementById("fileinput").addEventListener("change", (e) => {
     clearMessage();
     const protocol = document.getElementById("protocol").value;
@@ -59,9 +70,16 @@ document.getElementById("fileinput").addEventListener("change", (e) => {
 
 })
 
+//there has to be a better way to do this...
+let isLatest = true;
+document.getElementById("latest").addEventListener("change", () => {
+    isLatest = !isLatest;
+})
+
 //deploy on file submission
 document.getElementById("fileProtocolForm").addEventListener("submit", async (e) => {
     e.preventDefault();
+
     const protocol = document.getElementById("protocol").value;
     const files = document.getElementById("fileinput").files;
     const commitMessage = document.getElementById("commitmessage").value;
@@ -73,29 +91,37 @@ document.getElementById("fileProtocolForm").addEventListener("submit", async (e)
     }
 
     //get file contents and call deploy function from requests.js
+    //read every file to completion BEFORE deploying, otherwise fileContents is
+    //still empty when deployProtocol runs (FileReader is async).
+
+    const readFile = (file) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error(file.name));
+        reader.readAsText(file);
+    });
 
     let fileContents = {};
 
-    for(i=0;i<files.length;i++){
-        reader = new FileReader();
-
-        reader.onload = () => {
-            fileContents[file.name] = reader.result;
-        }
-        reader.onerror = () =>{
-            showMessage(`Error: Could not read file ${file.name}. Please try again`, "red");
-            document.getElementById("fileProtocolForm").reset();
-            document.getElementById("protocol").value = protocol;
-            return;
-        }
-        reader.readAsText(file);
-
-        }
-
-        await window.deployProtocol(protocol, fileContents, commitMessage, releaseNotes);
+    try{
+        const results = await Promise.all(
+            Array.from(files).map(async (file) => [file.name, await readFile(file)])
+        );
+        for(const [name, contents] of results) fileContents[name] = contents;
     }
-    
-)
+    catch(err){
+        showMessage(`Error: Could not read file ${err.message}. Please try again`, "red");
+        clearFilesFromForm();
+        return;
+    }
+
+
+    await window.deployProtocol(protocol, fileContents, commitMessage, releaseNotes, isLatest);
+
+    // catch {
+    //     showMessage("An error occurred while attempting to deploy the protocol", "red");
+    // }
+    })
 
 const allowedCSVNames = {
     "protocol-leia": [
@@ -166,4 +192,4 @@ const allowedCSVNames = {
         "MTM_write_your_own.csv",
         "Reminders.csv"
     ]
-}
+};

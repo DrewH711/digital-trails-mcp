@@ -9,41 +9,76 @@ async function send(mcpMethod, params, requestID=null, mcpSessionID=null){
     if(requestID!==null) body.id = requestID;
     if(mcpSessionID!==null) mcpHeaders.append('mcp-session-id',mcpSessionID);
     
-    mcpHeaders.forEach((val, key) => {console.log(`${key} : ${val}`);})
-    console.log(`${JSON.stringify(body)}`);
-    
     const res = await fetch(url, {
         method: "POST",
         headers: mcpHeaders,
         body: JSON.stringify(body)
     });
 
-    return res;
+    // Notifications (no id) get 202 with no meaningful body — nothing to await.
+    if (requestID === null) return { res, result: null };
+
+    const contentType = res.headers.get("content-type") || "";
+
+    // Plain JSON: the whole result is the body.
+    if (contentType.includes("application/json")) {
+        return { res, result: await res.json() };
+    }
+
+    if (contentType.includes("text/event-stream")){
+        const text = await res.text();
+
+        const lines = text.split(/\r?\n/);
+
+        for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            
+            const msg = JSON.parse(line.slice(5).trim());
+            
+            if (msg.id === requestID) {
+                return { res, result: msg };
+            }
+        }
+    }
+    
+
+    return {res, result: null};
 }
 
 const url = "http://localhost:8000/mcp";
 
-async function deployProtocol(protocol, fileContents, commitMessage, releaseNotes){
-
+async function deployProtocol(protocol, fileContents, commitMessage, releaseNotes, isLatest){
+    let id = 1;
     //initialize
     const init = await send(
         "initialize", {
-
         protocolVersion: "2024-11-05",
         capabilities: {},
         clientInfo: { name: "my-client", version: "1.0.0" }}, 
-        1
+        id
     );
 
-    let mcpSessionID = init.headers.get('mcp-session-id');
+    if(!(init.res.ok)) {
+        showMessage("Error: Could not connect to the server", "red");
+        return;
+    }
+    showMessage("Connected to the server", "green");
+
+
+
+    let mcpSessionID = init.res.headers.get('mcp-session-id');
     console.log(`mcp session ID recieved successfully: ${mcpSessionID}`);
 
     //initialized notification
     const initialized = await send("notifications/initialized", {}, null, mcpSessionID);
 
-    if (initialized.ok) console.log("initialized notification sent");
-    else console.log("initialized notification failed")
+    if (!initialized.res.ok) {
+        showMessage("Error: could not initialize", "red");
+        return;
+    }
+    showMessage("Initialized", "green");
 
+    id++;
     //ensure protocol_existence
     const get_protocol = await send(
         "tools/call", {
@@ -54,14 +89,22 @@ async function deployProtocol(protocol, fileContents, commitMessage, releaseNote
                 }
             }
         }, 
-        2, 
+        id, 
         mcpSessionID
     );
 
+    console.log(get_protocol.result);
+
+    if (get_protocol.result["isError"]){
+        showMessage("Failed to retrieve protocol on server", "red");
+        return;
+    }
+    showMessage("Retrieved protocol...", "green");
+
     //replace CSV files
     for (const [filename, contents] of Object.entries(fileContents)) {
-
-        await send(
+        id++;
+        let get_protocol = await send(
             "tools/call", {
                 "name":"swap_csv",
                 "arguments": {
@@ -72,60 +115,46 @@ async function deployProtocol(protocol, fileContents, commitMessage, releaseNote
                     }
                 }
             },
-            3,
+            id,
             mcpSessionID
         );
+
+        console.log(get_protocol.result);
+
+        if (get_protocol.result["isError"]){
+            showMessage(`Failed to read file ${filename}. Please try again`, "red");
+            return;
+        }
+        
     }
 
-    //build
-    const build = await send(
-        "tools/call", {
-            "name":"build_protocol",
-            "arguments": {
-                "args": {
-                    "protocol_name":protocol
-                }
-            }
-        },
-        4,
-        mcpSessionID
-    );
+    showMessage("Files read succesfully", "green");
+    id++;
 
-    //save with notes
-    const saveWithNotes = await send(
+    //build/save/release
+    const buildSaveRelease = await send(
         "tools/call", {
-            "name":"save_protocol_custom_notes",
+            "name":"build_save_and_release_protocol",
             "arguments": {
                 "args": {
-                    "protocol_name":protocol
+                    "protocol_name": protocol,
+                    "release_message" : commitMessage,
+                    "release_notes" : releaseNotes,
+                    "isLatest" : isLatest
                 },
-                "commit_message" : commitMessage,
-                "release_notes" : releaseNotes
             }
         },
-        5,
+        id,
         mcpSessionID
     );
 
-    //release
-    const release = await send(
-        "tools/call", {
-            "name":"release_protocol",
-            "arguments": {
-                "args": {
-                    "protocol_name":protocol
-                }
-            }
-        },
-        6,
-        mcpSessionID
-    );
+    console.log(`buildSaveRelease result: ${buildSaveRelease.result}`);
 
-    if(release.ok){
-        console.log(`successfully built and released ${protocol}`)
-        window.clearMessage();
-        window.showMessage("Successfully deployed", "green");
+    if (buildSaveRelease.result["isError"]){
+        showMessage(`Release failed: ${buildSaveRelease.result}`);
     }
+
+    showMessage("Succesfully deployed protocol!");
 
 }
 
