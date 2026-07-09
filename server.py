@@ -72,7 +72,7 @@ def get_protocol(args: tool_args.protocolArgs):
 
     try:
         url = utils.get_github_url(args.protocol_name)
-        git.clone_repository(url = url, path = f"./{args.protocol_name}", checkout_branch="agent-testing", depth=1)
+        git.clone_repository(url = url, path = f"./{args.protocol_name}", checkout_branch="main", depth=1)
 
     except ValueError:
         return f"Protocol '{args.protocol_name}' retrieved"
@@ -283,7 +283,7 @@ async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = 
             json={
                 "tag_name": new_release_number,
                 "name": new_release_number,
-                "target_commitish" : "agent-testing",
+                "target_commitish" : "main",
                 "body": release_notes,
                 "prerelease": not args.isLatest
             },
