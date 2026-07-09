@@ -1,5 +1,4 @@
 import re, tool_args
-import pygit2
 
 def _validate_semver(raw: str):
 

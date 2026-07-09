@@ -9,7 +9,7 @@ import os
 import shutil
 import requests
 import pandas
-from utils import _check_python_syntax, _numbered_excerpt, get_github_url, increment_tag, get_repo_owner
+import utils
 import pygit2 as git
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
@@ -31,6 +31,20 @@ auth_provider = GitHubProvider(
     base_url='http://localhost:8000'
 )
 
+ALLOW_LIST = set(map(str.lower, map(str.strip, os.getenv("ALLOW_LIST","").split(","))))
+
+def validate_user():
+
+    token = get_access_token()
+
+    if not token:
+        raise Exception("No valid token found")
+    
+    github_username = token.claims.get("login","")
+    
+    if (not github_username) or (github_username.lower() not in ALLOW_LIST):
+        raise Exception(f"User {github_username} not allowed")
+
 
 server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test", auth=auth_provider)
 
@@ -51,39 +65,29 @@ middleware = [
 
 server.disable(tags={'disable'})
 
-def guard(func):
-    def inner():
-        token = get_access_token()
-        github_username = token.claims.get("login","") # type: ignore
-        if github_username not in ALLOW_LIST:
-            raise Exception(f"User {github_username} not allowed")
-        
-        func()
-
-    return inner
-
-
 @server.tool(description="Clone a protocol into the current directory so it can be read and modified")
-@guard
 def get_protocol(args: tool_args.protocolArgs):
 
-        try:
-            url = get_github_url(args.protocol_name)
-            git.clone_repository(url = url, path = f"./{args.protocol_name}", checkout_branch="agent-testing", depth=1)
+    validate_user()
 
-        except ValueError:
-            return f"Protocol '{args.protocol_name}' retrieved"
+    try:
+        url = utils.get_github_url(args.protocol_name)
+        git.clone_repository(url = url, path = f"./{args.protocol_name}", checkout_branch="agent-testing", depth=1)
 
-        except git.GitError as e:
-            raise Exception(f"Git encountered an error: {e}")
-        
-        except Exception as e:
-            raise Exception(f"An unexpected exception occurred while retrieving protocol. Ensure that the protocol name is valid. Error msg: {e}")
-
+    except ValueError:
         return f"Protocol '{args.protocol_name}' retrieved"
+
+    except git.GitError as e:
+        raise Exception(f"Git encountered an error: {e}")
+    
+    except Exception as e:
+        raise Exception(f"An unexpected exception occurred while retrieving protocol. Ensure that the protocol name is valid. Error msg: {e}")
+
+    return f"Protocol '{args.protocol_name}' retrieved"
     
 @server.tool(description="Ask the user to specify the protocol to perform actions on", tags={'disable'})
 async def specify_protocol(ctx: Context = CurrentContext()):
+    validate_user()
     result = await ctx.elicit(
         message = "Please specify a protocol to perform actions on",
         response_type=tool_args.protocolArgs
@@ -97,8 +101,8 @@ async def specify_protocol(ctx: Context = CurrentContext()):
     
     
 @server.tool(description="Build a protocol to prepare for a save and/or release")
-@guard
 async def build_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
+    validate_user()
     
     repo_dir = f'{os.getcwd()}/{args.protocol_name}'
 
@@ -181,8 +185,8 @@ async def build_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = Cu
         raise Exception(f"Build failed due to unexpected exception. Error message: {e}")
     
 @server.tool(description="Save protocol without releasing. Default to this over save and release. Save after building and before releasing.")
-@guard
 async def save_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
+    validate_user()
     
     # commit and push changes
     repo_dir = f'{os.getcwd()}/{args.protocol_name}'
@@ -228,7 +232,7 @@ async def save_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = Cur
 
         # git push
         remote = repo.remotes["origin"]
-        remote.push(['refs/heads/agent-testing'], callbacks=GITHUB_CREDENTIALS)
+        remote.push(['refs/heads/main'], callbacks=GITHUB_CREDENTIALS)
 
     except git.GitError as e:
         raise RuntimeError(f"Failed to save due to git error.") from e
@@ -236,12 +240,12 @@ async def save_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = Cur
     return(f"Successfuly saved {args.protocol_name}")
 
 @server.tool(description="Create a new release version of this protocol and push it to GitHub. Always build and save first")
-@guard
 async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
+    validate_user()
     # create new release number and push release
     try:
         releases_response = requests.get(
-            f"https://api.github.com/repos/{get_repo_owner(args.protocol_name)}/releases",
+            f"https://api.github.com/repos/{utils.get_repo_owner(args.protocol_name)}/releases",
             headers={
                 "Authorization": f"Bearer {os.getenv('LEIA_PAT')}",
                 "Accept": "application/vnd.github+json",
@@ -266,12 +270,12 @@ async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = 
     else:
         release_notes = await ctx.get_state(f'release notes {args.protocol_name}')
 
-    new_release_number = increment_tag(last_release_number)
+    new_release_number = utils.increment_tag(last_release_number)
 
     # must use GitHub REST API to publish releases because it cannot be done via command line
     try:
         requests.post(
-            f"https://api.github.com/repos/{get_repo_owner(args.protocol_name)}/releases",
+            f"https://api.github.com/repos/{utils.get_repo_owner(args.protocol_name)}/releases",
             headers={
                 "Authorization": f"Bearer {os.getenv('LEIA_PAT')}",
                 "Accept": "application/vnd.github+json",
@@ -296,8 +300,9 @@ async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = 
 
 
 @server.tool(description="Create and publish new release for a protocol")
-@guard
 async def build_save_and_release_protocol(args: tool_args.buildSaveReleaseArgs):
+    validate_user()
+
     print(f"""
     protocol_name: {args.protocol_name}
     release_message: {args.release_message}
@@ -364,8 +369,9 @@ def get_protocol_special_json(args: tool_args.protocolArgs):
     return file_paths
 
 @server.tool(description="Replace the contents of an EXISTING CSV file in a protocol's make/CSV directory with uploaded text. Match-existing-names-only: an upload whose file_name has no matching file in the directory is rejected. Used by the web portal to swap in user-supplied CSVs before a build.")
-@guard
 def swap_csv(args: tool_args.swapCSVArgs):
+
+    validate_user()
     
     if not os.access(args.protocol_name, mode=0):
         return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
@@ -411,7 +417,7 @@ def edit_protocol_script(args: tool_args.editScriptArgs):
     if existing_contents == args.new_contents:
         return "No changes required; new contents are identical to the current file."
 
-    syntax_error = _check_python_syntax(args.new_contents, args.script_path)
+    syntax_error = utils._check_python_syntax(args.new_contents, args.script_path)
     if syntax_error:
         return syntax_error
 
@@ -448,7 +454,7 @@ def edit_protocol_script_lines(args: tool_args.editScriptLinesArgs):
 
     new_source = ''.join(new_lines)
 
-    syntax_error = _check_python_syntax(new_source, args.script_path)
+    syntax_error = utils._check_python_syntax(new_source, args.script_path)
     if syntax_error:
         return syntax_error
 
@@ -458,7 +464,7 @@ def edit_protocol_script_lines(args: tool_args.editScriptLinesArgs):
     # Show the updated region (with a little context) so the edit can be verified.
     region_start = args.start_line
     region_end = args.start_line + len(replacement_lines) - 1
-    excerpt = _numbered_excerpt(new_lines, region_start - 3, region_end + 3)
+    excerpt = utils._numbered_excerpt(new_lines, region_start - 3, region_end + 3)
     return (
         f"Replaced lines {args.start_line}-{args.end_line} of {args.script_path} "
         f"with {len(replacement_lines)} line(s). Updated region with context:\n{excerpt}"
