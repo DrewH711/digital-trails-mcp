@@ -1,4 +1,5 @@
 import re, tool_args
+from fastmcp.server.dependencies import get_access_token
 
 def _validate_semver(raw: str):
 
@@ -71,3 +72,17 @@ def _parse_tag(tag: str):
 def increment_tag(tag: str):
     semver = _parse_tag(tag)
     return f'{semver[0]}.{semver[1]}.{semver[2] + 1}'
+
+def validate_user():
+
+    ALLOW_LIST = {"DrewH711"}
+
+    token = get_access_token()
+
+    if not token:
+        raise Exception("No valid token found")
+    
+    github_username = token.claims.get("login","")
+    
+    if (not github_username) or (github_username.lower() not in ALLOW_LIST):
+        raise Exception(f"User {github_username} not allowed")

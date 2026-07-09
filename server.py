@@ -1,7 +1,6 @@
 from fastmcp import FastMCP, Context
 from fastmcp.dependencies import CurrentContext
 from fastmcp.server.auth.providers.github import GitHubProvider
-from fastmcp.server.dependencies import get_access_token
 from dotenv import load_dotenv
 import subprocess
 import tool_args
@@ -31,19 +30,7 @@ auth_provider = GitHubProvider(
     base_url='http://localhost:8000'
 )
 
-ALLOW_LIST = set(map(str.lower, map(str.strip, os.getenv("ALLOW_LIST","").split(","))))
 
-def validate_user():
-
-    token = get_access_token()
-
-    if not token:
-        raise Exception("No valid token found")
-    
-    github_username = token.claims.get("login","")
-    
-    if (not github_username) or (github_username.lower() not in ALLOW_LIST):
-        raise Exception(f"User {github_username} not allowed")
 
 
 server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test", auth=auth_provider)
@@ -68,7 +55,7 @@ server.disable(tags={'disable'})
 @server.tool(description="Clone a protocol into the current directory so it can be read and modified")
 def get_protocol(args: tool_args.protocolArgs):
 
-    validate_user()
+    utils.validate_user()
 
     try:
         url = utils.get_github_url(args.protocol_name)
@@ -87,7 +74,7 @@ def get_protocol(args: tool_args.protocolArgs):
     
 @server.tool(description="Ask the user to specify the protocol to perform actions on", tags={'disable'})
 async def specify_protocol(ctx: Context = CurrentContext()):
-    validate_user()
+    utils.validate_user()
     result = await ctx.elicit(
         message = "Please specify a protocol to perform actions on",
         response_type=tool_args.protocolArgs
@@ -102,7 +89,7 @@ async def specify_protocol(ctx: Context = CurrentContext()):
     
 @server.tool(description="Build a protocol to prepare for a save and/or release")
 async def build_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
-    validate_user()
+    utils.validate_user()
     
     repo_dir = f'{os.getcwd()}/{args.protocol_name}'
 
@@ -186,7 +173,7 @@ async def build_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = Cu
     
 @server.tool(description="Save protocol without releasing. Default to this over save and release. Save after building and before releasing.")
 async def save_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
-    validate_user()
+    utils.validate_user()
     
     # commit and push changes
     repo_dir = f'{os.getcwd()}/{args.protocol_name}'
@@ -241,7 +228,7 @@ async def save_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = Cur
 
 @server.tool(description="Create a new release version of this protocol and push it to GitHub. Always build and save first")
 async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
-    validate_user()
+    utils.validate_user()
     # create new release number and push release
     try:
         releases_response = requests.get(
@@ -301,7 +288,7 @@ async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = 
 
 @server.tool(description="Create and publish new release for a protocol")
 async def build_save_and_release_protocol(args: tool_args.buildSaveReleaseArgs):
-    validate_user()
+    utils.validate_user()
 
     print(f"""
     protocol_name: {args.protocol_name}
@@ -371,7 +358,7 @@ def get_protocol_special_json(args: tool_args.protocolArgs):
 @server.tool(description="Replace the contents of an EXISTING CSV file in a protocol's make/CSV directory with uploaded text. Match-existing-names-only: an upload whose file_name has no matching file in the directory is rejected. Used by the web portal to swap in user-supplied CSVs before a build.")
 def swap_csv(args: tool_args.swapCSVArgs):
 
-    validate_user()
+    utils.validate_user()
     
     if not os.access(args.protocol_name, mode=0):
         return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
