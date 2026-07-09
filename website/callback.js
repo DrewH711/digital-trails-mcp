@@ -26,6 +26,5 @@ if (!res.ok) {
   const { access_token, expires_in } = await res.json();
   sessionStorage.setItem('access_token', access_token);
   sessionStorage.setItem('expires_in', expires_in);
-  console.log(access_token, expires_in);
   window.location = '/index.html';
 }

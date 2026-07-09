@@ -43,9 +43,6 @@ document.getElementById("fileinput").addEventListener("change", (e) => {
     if(protocol!==""){
 
         const files = e.target.files;
-        console.log(files)
-
-        
         
         for(let i=0; i<files.length; i++){
             let file = files.item(i);

@@ -7,7 +7,6 @@ if (!existingToken){
     return btoa(String.fromCharCode(...new Uint8Array(buf)))
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     } 
-    console.log('running auth');
     const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
     const challenge = base64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
     sessionStorage.setItem('pkce_verifier', verifier);
@@ -25,8 +24,4 @@ if (!existingToken){
     authUrl.searchParams.set('resource', 'http://localhost:8000/mcp');
 
     window.location = authUrl;
-}
-else {
-    console.log("Authenticated!");
-    console.log(existingToken, expires_in);
 }

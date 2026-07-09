@@ -69,7 +69,6 @@ async function deployProtocol(protocol, fileContents, commitMessage, releaseNote
 
 
     let mcpSessionID = init.res.headers.get('mcp-session-id');
-    console.log(`mcp session ID recieved successfully: ${mcpSessionID}`);
 
     //initialized notification
     const initialized = await send("notifications/initialized", {}, null, mcpSessionID);
@@ -95,8 +94,6 @@ async function deployProtocol(protocol, fileContents, commitMessage, releaseNote
         mcpSessionID
     );
 
-    console.log(get_protocol.result);
-
     if (get_protocol.result["isError"]){
         showMessage("Failed to retrieve protocol on server", "red");
         return;
@@ -120,8 +117,6 @@ async function deployProtocol(protocol, fileContents, commitMessage, releaseNote
             id,
             mcpSessionID
         );
-
-        console.log(get_protocol.result);
 
         if (get_protocol.result["isError"]){
             showMessage(`Failed to read file ${filename}. Please try again`, "red");
@@ -149,8 +144,6 @@ async function deployProtocol(protocol, fileContents, commitMessage, releaseNote
         id,
         mcpSessionID
     );
-
-    console.log(`buildSaveRelease result: ${buildSaveRelease.result}`);
 
     if (buildSaveRelease.result["isError"]){
         showMessage(`Release failed: ${buildSaveRelease.result}`);
