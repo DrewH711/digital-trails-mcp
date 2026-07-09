@@ -1,5 +1,7 @@
 from fastmcp import FastMCP, Context
 from fastmcp.dependencies import CurrentContext
+from fastmcp.server.auth.providers.github import GitHubProvider
+from fastmcp.server.dependencies import get_access_token
 from dotenv import load_dotenv
 import subprocess
 import tool_args
@@ -9,7 +11,6 @@ import requests
 import pandas
 from utils import _check_python_syntax, _numbered_excerpt, get_github_url, increment_tag, get_repo_owner
 import pygit2 as git
-from time import perf_counter
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 
@@ -21,15 +22,23 @@ userpass = git.UserPass(
 )
 
 GITHUB_CREDENTIALS = git.RemoteCallbacks(credentials=userpass)
+ALLOW_LIST = os.getenv('ALLOW_LIST',{})
+client_secret = os.getenv('OAUTH_CLIENT_SECRET',"")
+
+auth_provider = GitHubProvider(
+    client_id="Ov23likbvFkZTbNxc8at",
+    client_secret=client_secret,
+    base_url='http://localhost:8000'
+)
 
 
-server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test")
+server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test", auth=auth_provider)
 
 middleware = [
     Middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Allow all origins; use specific origins for security
-        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_origins=["http://localhost:5000"],
+        allow_methods=["POST"],
         allow_headers=[
             "mcp-protocol-version",
             "mcp-session-id",
@@ -40,12 +49,27 @@ middleware = [
     )
 ]
 
+server.disable(tags={'disable'})
+
+def guard(func):
+    def inner():
+        token = get_access_token()
+        github_username = token.claims.get("login","") # type: ignore
+        if github_username not in ALLOW_LIST:
+            raise Exception(f"User {github_username} not allowed")
+        
+        func()
+
+    return inner
+
+
 @server.tool(description="Clone a protocol into the current directory so it can be read and modified")
+@guard
 def get_protocol(args: tool_args.protocolArgs):
-    
+
         try:
             url = get_github_url(args.protocol_name)
-            git.clone_repository(url = url, path = f"./{args.protocol_name}", checkout_branch="agent-testing")
+            git.clone_repository(url = url, path = f"./{args.protocol_name}", checkout_branch="agent-testing", depth=1)
 
         except ValueError:
             return f"Protocol '{args.protocol_name}' retrieved"
@@ -58,7 +82,7 @@ def get_protocol(args: tool_args.protocolArgs):
 
         return f"Protocol '{args.protocol_name}' retrieved"
     
-@server.tool(description="Ask the user to specify the protocol to perform actions on")
+@server.tool(description="Ask the user to specify the protocol to perform actions on", tags={'disable'})
 async def specify_protocol(ctx: Context = CurrentContext()):
     result = await ctx.elicit(
         message = "Please specify a protocol to perform actions on",
@@ -73,6 +97,7 @@ async def specify_protocol(ctx: Context = CurrentContext()):
     
     
 @server.tool(description="Build a protocol to prepare for a save and/or release")
+@guard
 async def build_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
     
     repo_dir = f'{os.getcwd()}/{args.protocol_name}'
@@ -156,6 +181,7 @@ async def build_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = Cu
         raise Exception(f"Build failed due to unexpected exception. Error message: {e}")
     
 @server.tool(description="Save protocol without releasing. Default to this over save and release. Save after building and before releasing.")
+@guard
 async def save_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
     
     # commit and push changes
@@ -182,11 +208,7 @@ async def save_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = Cur
 
         # git add -a
         index = repo.index
-        status = repo.status(untracked_files='all')
-
-        for path in status:
-            index.add(path)
-
+        index.add_all()
         index.write()
 
         # git commit
@@ -214,6 +236,7 @@ async def save_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = Cur
     return(f"Successfuly saved {args.protocol_name}")
 
 @server.tool(description="Create a new release version of this protocol and push it to GitHub. Always build and save first")
+@guard
 async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
     # create new release number and push release
     try:
@@ -273,6 +296,7 @@ async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = 
 
 
 @server.tool(description="Create and publish new release for a protocol")
+@guard
 async def build_save_and_release_protocol(args: tool_args.buildSaveReleaseArgs):
     print(f"""
     protocol_name: {args.protocol_name}
@@ -309,20 +333,20 @@ async def build_save_and_release_protocol(args: tool_args.buildSaveReleaseArgs):
 
 # return lists of paths to python scripts and CSVs
 # There are far too many JSON files to be useful, and they will be regenerated by the scripts on release anyway
-@server.tool(description="List file paths from a protocol")
+@server.tool(description="List file paths from a protocol",tags={'disable'})
 def get_protocol_csv_list(args: tool_args.protocolArgs):
 
     if not os.access(args.protocol_name, mode=0): return f"Protocol {args.protocol_name} not found. Use `get_protocol` tool first."
     path = f"./{args.protocol_name}/make/CSV/"
     return [(path+file) for file in os.listdir(path) if (file.endswith(".csv") and "image" not in file)]
 
-@server.tool(description="View list of available python scripts")
+@server.tool(description="View list of available python scripts",tags={'disable'})
 def get_protocol_python_script_list(args: tool_args.protocolArgs):
     if not os.access(args.protocol_name, mode=0): return f"Protocol {args.protocol_name} not found. Use `get_protocol` tool first."
     path = f"./{args.protocol_name}/make/scripts/"
     return [(path+file) for file in os.listdir(path) if (file.endswith(".py") and "image" not in file)]
 
-@server.tool(description="View list of special json files such as instructions")
+@server.tool(description="View list of special json files such as instructions",tags={'disable'})
 def get_protocol_special_json(args: tool_args.protocolArgs):
     if not os.access(args.protocol_name, mode=0): return f"Protocol {args.protocol_name} not found. Use `get_protocol` tool first."
     
@@ -340,6 +364,7 @@ def get_protocol_special_json(args: tool_args.protocolArgs):
     return file_paths
 
 @server.tool(description="Replace the contents of an EXISTING CSV file in a protocol's make/CSV directory with uploaded text. Match-existing-names-only: an upload whose file_name has no matching file in the directory is rejected. Used by the web portal to swap in user-supplied CSVs before a build.")
+@guard
 def swap_csv(args: tool_args.swapCSVArgs):
     
     if not os.access(args.protocol_name, mode=0):
@@ -362,7 +387,7 @@ def swap_csv(args: tool_args.swapCSVArgs):
 
     return f"Swapped {args.file_name} ({len(args.content)} characters written)"
 
-@server.tool(description="Get file contents from a protocol")
+@server.tool(description="Get file contents from a protocol", tags={'disable'})
 def get_file_contents(args: tool_args.readProtocolArgs):
 
     file_contents = {}
@@ -374,7 +399,7 @@ def get_file_contents(args: tool_args.readProtocolArgs):
 
     return file_contents
 
-@server.tool(description="Replace the entire contents of a Python script under <protocol>/make/scripts. The edit is rejected if the result is not valid Python. Prefer edit_protocol_script_lines for small, targeted changes.")
+@server.tool(description="Replace the entire contents of a Python script under <protocol>/make/scripts. The edit is rejected if the result is not valid Python. Prefer edit_protocol_script_lines for small, targeted changes.", tags={'disable'})
 def edit_protocol_script(args: tool_args.editScriptArgs):
 
     try:
@@ -397,7 +422,7 @@ def edit_protocol_script(args: tool_args.editScriptArgs):
     new_count = args.new_contents.count('\n') + 1
     return f"Replaced {args.script_path} ({old_count} -> {new_count} lines)."
 
-@server.tool(description="Replace a 1-based, inclusive line range in a Python script under <protocol>/make/scripts. Use this for small, targeted edits. The edit is rejected if the result is not valid Python.")
+@server.tool(description="Replace a 1-based, inclusive line range in a Python script under <protocol>/make/scripts. Use this for small, targeted edits. The edit is rejected if the result is not valid Python.", tags={'disable'})
 def edit_protocol_script_lines(args: tool_args.editScriptLinesArgs):
 
     try:
@@ -439,18 +464,18 @@ def edit_protocol_script_lines(args: tool_args.editScriptLinesArgs):
         f"with {len(replacement_lines)} line(s). Updated region with context:\n{excerpt}"
     )
 
-@server.tool(description="Read specific lines of a CSV")
+@server.tool(description="Read specific lines of a CSV", tags={'disable'})
 def read_csv(args: tool_args.readCSVArgs):
     df = pandas.read_csv(args.csv_path, encoding="utf-8", encoding_errors="replace")
     return df.iloc[args.start:args.end].to_dict(orient='records')
 
-@server.tool(description="Get CSV schema to make edits")
+@server.tool(description="Get CSV schema to make edits", tags={'disable'})
 def get_csv_schema(args: tool_args.readCSVArgs):
     df = pandas.read_csv(args.csv_path, encoding="utf-8", encoding_errors="replace")
     if "LEIA Interventions, Resources, and Tips - Long Scenarios.csv" in args.csv_path: return list(df.head(1)) # This particular file is weird
     return list(df.head(0))
 
-@server.tool(description="Get indices of CSV rows that contain a specific string")
+@server.tool(description="Get indices of CSV rows that contain a specific string", tags={'disable'})
 def search_for_string_in_csv(args: tool_args.searchCSVArgs):
     match_indices = set()
     df = pandas.read_csv(args.csv_path, encoding="utf-8", encoding_errors="replace")
@@ -470,7 +495,7 @@ def search_for_string_in_csv(args: tool_args.searchCSVArgs):
 
     return f"Index matches: {match_indices}"
 
-@server.tool(description="Change a specific CSV cell")
+@server.tool(description="Change a specific CSV cell", tags={'disable'})
 def edit_csv_cell(args: tool_args.editCSVArgs):
 
     header = get_csv_schema(args=tool_args.readCSVArgs(protocol_name=args.protocol_name, csv_path=args.csv_path))
@@ -490,7 +515,7 @@ def edit_csv_cell(args: tool_args.editCSVArgs):
 
     return f"Sucessfully changed row {args.row_index} of {args.column_name} to {args.new_value}"
 
-@server.tool(description="Find and replace all occurrences of a string in a CSV file")
+@server.tool(description="Find and replace all occurrences of a string in a CSV file", tags={'disable'})
 def find_and_replace_in_csv(args: tool_args.findAndReplaceArgs):
 
     header = get_csv_schema(args=tool_args.readCSVArgs(protocol_name=args.protocol_name, csv_path=args.csv_path))

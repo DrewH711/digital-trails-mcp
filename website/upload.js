@@ -1,5 +1,5 @@
 function showMessage(message, color='black'){
-    messageDisplay = document.getElementById("messages");
+    const messageDisplay = document.getElementById("messages");
     messageDisplay.textContent = message;
     messageDisplay.style.color = color;
 }
@@ -48,8 +48,8 @@ document.getElementById("fileinput").addEventListener("change", (e) => {
         
         
         for(let i=0; i<files.length; i++){
-            file = files.item(i);
-            allowedNames = allowedCSVNames[protocol]
+            let file = files.item(i);
+            let allowedNames = allowedCSVNames[protocol];
             
             if( !(allowedNames.includes(file.name)) ) {
                 showMessage(`Error: ${file.name} does not match the naming scheme for ${document.getElementById(protocol).innerText}. Please refer to the naming scheme below.`, "red")
@@ -117,10 +117,6 @@ document.getElementById("fileProtocolForm").addEventListener("submit", async (e)
 
 
     await window.deployProtocol(protocol, fileContents, commitMessage, releaseNotes, isLatest);
-
-    // catch {
-    //     showMessage("An error occurred while attempting to deploy the protocol", "red");
-    // }
     })
 
 const allowedCSVNames = {

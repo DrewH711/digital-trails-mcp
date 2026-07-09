@@ -1,10 +1,12 @@
 async function send(mcpMethod, params, requestID=null, mcpSessionID=null){
+    const access_token = sessionStorage.getItem('access_token');
 
     const body = {jsonrpc : "2.0", method: mcpMethod, "params": params};
     
     const mcpHeaders = new Headers();
     mcpHeaders.append("Content-Type", "application/json");
     mcpHeaders.append("Accept","application/json, text/event-stream");
+    mcpHeaders.append("Authorization", `Bearer ${access_token}`);
 
     if(requestID!==null) body.id = requestID;
     if(mcpSessionID!==null) mcpHeaders.append('mcp-session-id',mcpSessionID);
