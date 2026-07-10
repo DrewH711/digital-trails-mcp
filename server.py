@@ -27,19 +27,16 @@ client_secret = os.getenv('OAUTH_CLIENT_SECRET',"")
 auth_provider = GitHubProvider(
     client_id="Ov23likbvFkZTbNxc8at",
     client_secret=client_secret,
-    base_url='http://localhost:8000'
+    base_url=os.getenv('BASE_URL','about:blank')
 )
-
-
-
 
 server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test", auth=auth_provider)
 
 middleware = [
     Middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5000"],
-        allow_methods=["POST"],
+        allow_origins=["*"],
+        allow_methods=["POST", "GET", "DELETE"],
         allow_headers=[
             "mcp-protocol-version",
             "mcp-session-id",
@@ -523,4 +520,4 @@ def find_and_replace_in_csv(args: tool_args.findAndReplaceArgs):
 
 
 if __name__ == '__main__':
-    server.run(transport="streamable-http", middleware=middleware)
+    server.run(transport="streamable-http", middleware=middleware, host='0.0.0.0', port=8000)

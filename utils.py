@@ -77,6 +77,8 @@ def validate_user():
 
     ALLOW_LIST = {"DrewH711"}
 
+    ALLOW_LIST_LOWER = map(str.lower, ALLOW_LIST)
+
     token = get_access_token()
 
     if not token:
@@ -84,5 +86,5 @@ def validate_user():
     
     github_username = token.claims.get("login","")
     
-    if (not github_username) or (github_username.lower() not in ALLOW_LIST):
+    if (not github_username) or (github_username.lower() not in ALLOW_LIST_LOWER):
         raise Exception(f"User {github_username} not allowed")
