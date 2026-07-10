@@ -13,8 +13,6 @@ import pygit2 as git
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 
-# add spaces and comments
-
 load_dotenv("keys.env")
 
 userpass = git.UserPass(
@@ -37,7 +35,7 @@ server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from 
 middleware = [
     Middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=["https://brave-coast-082803d0f.7.azurestaticapps.net"],
         allow_methods=["POST", "GET", "DELETE"],
         allow_headers=[
             "mcp-protocol-version",
