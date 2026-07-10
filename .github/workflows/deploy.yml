@@ -22,7 +22,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Login to ACR
-        run: az acr login --name trailscontainerregistry2
+        run: az acr login --name trailstestcontainerregistry2
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
@@ -35,8 +35,8 @@ jobs:
           push: true
           provenance: false
           tags: |
-            trailscontainerregistry2.azurecr.io/protocol-builder-mcp:latest
-            trailscontainerregistry2.azurecr.io/protocol-builder-mcp:${{ github.sha }}
+            trailstestcontainerregistry2.azurecr.io/protocol-builder-mcp:latest
+            trailstestcontainerregistry2.azurecr.io/protocol-builder-mcp:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -45,4 +45,4 @@ jobs:
         with:
           containerAppName: protocol-builder-mcp
           resourceGroup: test
-          imageToDeploy: trailscontainerregistry2.azurecr.io/protocol-builder-mcp:${{ github.sha }}
+          imageToDeploy: trailstestcontainerregistry2.azurecr.io/protocol-builder-mcp:${{ github.sha }}
