@@ -75,7 +75,7 @@ def increment_tag(tag: str):
 
 def validate_user():
 
-    ALLOW_LIST = {"DrewH711"}
+    ALLOW_LIST = {"DrewH711", "mrucker"}
 
     ALLOW_LIST_LOWER = map(str.lower, ALLOW_LIST)
 

@@ -22,7 +22,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Login to ACR
-        run: az acr login --name trailscontainerregistry
+        run: az acr login --name trailscontainerregistry2
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
@@ -35,14 +35,14 @@ jobs:
           push: true
           provenance: false
           tags: |
-            trailscontainerregistry.azurecr.io/protocol-builder-mcp:latest
-            trailscontainerregistry.azurecr.io/protocol-builder-mcp:${{ github.sha }}
+            trailscontainerregistry2.azurecr.io/protocol-builder-mcp:latest
+            trailscontainerregistry2.azurecr.io/protocol-builder-mcp:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Deploy to Container Apps
         uses: azure/container-apps-deploy-action@v1
         with:
-          containerAppName: trailscontainerapp
-          resourceGroup: digital-trails
-          imageToDeploy: trailscontainerregistry.azurecr.io/protocol-builder-mcp:${{ github.sha }}
+          containerAppName: protocol-builder-mcp
+          resourceGroup: test
+          imageToDeploy: trailscontainerregistry2.azurecr.io/protocol-builder-mcp:${{ github.sha }}
