@@ -12,8 +12,6 @@ import utils
 import pygit2 as git
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
-from clerk_backend_api import Clerk
-import asyncio
 
 load_dotenv("keys.env")
 
@@ -28,7 +26,7 @@ auth_provider = ClerkProvider(
     domain='clerk.portal.digital-trails.org',
     client_id="BUKGLKFt30eAII8a",
     client_secret=os.environ['CLERK_CLIENT_SECRET'],
-    base_url=os.environ['BASE_URL']
+    base_url='http://localhost:8000'
 )
 
 server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test", auth=auth_provider)
@@ -36,7 +34,7 @@ server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from 
 middleware = [
     Middleware(
         CORSMiddleware,
-        allow_origins=["https://brave-coast-082803d0f.7.azurestaticapps.net"],
+        allow_origins=["*"],
         allow_methods=["POST", "GET", "DELETE"],
         allow_headers=[
             "mcp-protocol-version",
@@ -521,4 +519,4 @@ def find_and_replace_in_csv(args: tool_args.findAndReplaceArgs):
 
 
 if __name__ == '__main__':
-    server.run(transport="streamable-http", middleware=middleware, host='0.0.0.0', port=8000)
+    server.run(transport="streamable-http", middleware=middleware, host='127.0.0.1', port=8000)
