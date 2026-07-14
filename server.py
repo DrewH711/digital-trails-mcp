@@ -23,7 +23,6 @@ git_credentials = git.UserPass(
 )
 
 GITHUB_CREDENTIALS = git.RemoteCallbacks(credentials=git_credentials)
-ALLOW_LIST = os.environ['ALLOW_LIST']
 
 auth_provider = ClerkProvider(
     domain='https://clerk.portal.digital-trails.org',
