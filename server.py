@@ -1,6 +1,6 @@
 from fastmcp import FastMCP, Context
 from fastmcp.dependencies import CurrentContext
-from fastmcp.server.auth.providers.github import GitHubProvider
+from fastmcp.server.auth.providers.clerk import ClerkProvider
 from dotenv import load_dotenv
 import subprocess
 import tool_args
@@ -12,22 +12,24 @@ import utils
 import pygit2 as git
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
+from clerk_backend_api import Clerk
+import asyncio
 
 load_dotenv("keys.env")
 
-userpass = git.UserPass(
+git_credentials = git.UserPass(
     username ="Digital Trails Auto-Commit Bot",
-    password = os.getenv('LEIA_PAT') # type: ignore
+    password = os.environ['LEIA_PAT']
 )
 
-GITHUB_CREDENTIALS = git.RemoteCallbacks(credentials=userpass)
-ALLOW_LIST = os.getenv('ALLOW_LIST',{})
-client_secret = os.getenv('OAUTH_CLIENT_SECRET',"")
+GITHUB_CREDENTIALS = git.RemoteCallbacks(credentials=git_credentials)
+ALLOW_LIST = os.environ['ALLOW_LIST']
 
-auth_provider = GitHubProvider(
-    client_id="Ov23likbvFkZTbNxc8at",
-    client_secret=client_secret,
-    base_url=os.getenv('BASE_URL','about:blank')
+auth_provider = ClerkProvider(
+    domain='https://clerk.portal.digital-trails.org',
+    client_id="BUKGLKFt30eAII8a",
+    client_secret=os.environ['CLERK_CLIENT_SECRET'],
+    base_url=os.environ['BASE_URL'],
 )
 
 server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test", auth=auth_provider)
@@ -231,7 +233,7 @@ async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = 
         releases_response = requests.get(
             f"https://api.github.com/repos/{utils.get_repo_owner(args.protocol_name)}/releases",
             headers={
-                "Authorization": f"Bearer {os.getenv('LEIA_PAT')}",
+                "Authorization": f"Bearer {os.environ['LEIA_PAT']}",
                 "Accept": "application/vnd.github+json",
             },
             params={"per_page": 1},
@@ -261,7 +263,7 @@ async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = 
         requests.post(
             f"https://api.github.com/repos/{utils.get_repo_owner(args.protocol_name)}/releases",
             headers={
-                "Authorization": f"Bearer {os.getenv('LEIA_PAT')}",
+                "Authorization": f"Bearer {os.environ['LEIA_PAT']}",
                 "Accept": "application/vnd.github+json",
             },
             json={
