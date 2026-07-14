@@ -28,7 +28,7 @@ auth_provider = ClerkProvider(
     domain='clerk.portal.digital-trails.org',
     client_id="BUKGLKFt30eAII8a",
     client_secret=os.environ['CLERK_CLIENT_SECRET'],
-    base_url=os.environ['BASE_URL'],
+    base_url=os.environ['BASE_URL']
 )
 
 server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test", auth=auth_provider)

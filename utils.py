@@ -74,4 +74,18 @@ def increment_tag(tag: str):
     return f'{semver[0]}.{semver[1]}.{semver[2] + 1}'
 
 def validate_user():
-    return True
+    ALLOW_LIST = {"DrewH711", "mrucker"}
+
+    ALLOW_LIST_LOWER = map(str.lower, ALLOW_LIST)
+
+    token = get_access_token()
+
+    if not token:
+        raise Exception("No valid token found")
+    
+    print(token.claims)
+    
+    github_username = token.claims.get("login","")
+    
+    # if (not github_username) or (github_username.lower() not in ALLOW_LIST_LOWER):
+    #     raise Exception(f"User {github_username} not allowed")
