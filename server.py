@@ -57,7 +57,10 @@ def get_protocol(args: tool_args.protocolArgs):
 
     try:
         url = utils.get_github_url(args.protocol_name)
-        git.clone_repository(url = url, path = f"./{args.protocol_name}", checkout_branch="main", depth=1)
+        repo = git.clone_repository(url = url, path = f"./{args.protocol_name}", checkout_branch="main", depth=1)
+        remote = repo.remotes["origin"]
+        head = remote.list_heads()[0]
+        repo.merge(head.oid)
 
     except ValueError:
         return f"Protocol '{args.protocol_name}' retrieved"
