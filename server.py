@@ -1,6 +1,8 @@
 from fastmcp import FastMCP, Context
 from fastmcp.dependencies import CurrentContext
 from fastmcp.server.auth.providers.clerk import ClerkProvider
+from fastmcp.server.auth import MultiAuth
+from fastmcp.server.auth.providers.jwt import JWTVerifier
 from dotenv import load_dotenv
 import subprocess
 import tool_args
@@ -22,14 +24,24 @@ git_credentials = git.UserPass(
 
 GITHUB_CREDENTIALS = git.RemoteCallbacks(credentials=git_credentials)
 
-auth_provider = ClerkProvider(
+auth = MultiAuth(
+    server=ClerkProvider(
     domain='clerk.portal.digital-trails.org',
     client_id="BUKGLKFt30eAII8a",
     client_secret=os.environ['CLERK_CLIENT_SECRET'],
-    base_url='http://localhost:8000'
+    base_url=os.environ['BASE_URL']
+    ),
+    verifiers=[
+        JWTVerifier(
+            jwks_uri='https://supreme-haddock-40.clerk.accounts.dev/.well-known/jwks.json',
+            issuer='https://supreme-haddock-40.clerk.accounts.dev',
+            required_scopes=None
+        )
+    ],
+    required_scopes=[]
 )
 
-server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test", auth=auth_provider)
+server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from this server to deploy a digital trails-based project such as Leia, Mindtrails-Movement, Mindtrails-Spanish, UMA, or github-mcp-test", auth=auth)
 
 middleware = [
     Middleware(
