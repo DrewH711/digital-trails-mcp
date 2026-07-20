@@ -12,3 +12,9 @@ wheels/
 .venv
 *.ipynb
 *.md
+
+# Protocols
+/protocol-leia
+/protocol-uma
+mindtrails_movement
+mindtrails_spanish
