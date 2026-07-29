@@ -46,7 +46,7 @@ server = FastMCP(name="digital-trails-autodeploy", instructions="Use tools from 
 middleware = [
     Middleware(
         CORSMiddleware,
-        allow_origins=["https://brave-coast-082803d0f.7.azurestaticapps.net"],
+        allow_origins=["https://brave-coast-082803d0f.7.azurestaticapps.net", "https://agreeable-hill-024046d0f.7.azurestaticapps.net"],
         allow_methods=["POST", "GET", "DELETE"],
         allow_headers=[
             "mcp-protocol-version",
