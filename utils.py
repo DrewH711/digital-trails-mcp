@@ -74,14 +74,16 @@ def increment_tag(tag: str):
     return f'{semver[0]}.{semver[1]}.{semver[2] + 1}'
 
 def validate_user():
-    ALLOW_LIST = {"user_3GVABHlVRLtumhBnIIkAY1IH7oF","user_3GBhLGw7Fczb9jDNvmHEkOwUExh","user_3GBggq1svMAQChxeWLLGnGUspAx","user_3GDxg44ltExURYV4LnmvOaYgnUS","user_3GEZRLcl7NmMUrrUePGNyTgUigE"}
+    ALLOW_LIST = {"user_3GVABHlVRLtumhBnIIkAY1IH7oF","user_3GBhLGw7Fczb9jDNvmHEkOwUExh","user_3GBggq1svMAQChxeWLLGnGUspAx","user_3GDxg44ltExURYV4LnmvOaYgnUS","user_3GEZRLcl7NmMUrrUePGNyTgUigE","user_3GY5LNS9apzvI534vneTJM2OIw4"}
 
     token = get_access_token()
-
+    
     if not token:
         raise Exception("No valid token found")
+
+    print(token.claims)    
     
-    if (token.claims.get('sub') in ALLOW_LIST) and token.claims.get('email') and token.claims.get('email_verified'):
+    if token.claims.get('sub') in ALLOW_LIST:
         return True
     
     raise Exception("Access denied")
