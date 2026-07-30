@@ -63,7 +63,7 @@ server.disable(tags={'disable'})
 @server.tool(description="Clone a protocol into the current directory so it can be read and modified")
 def get_protocol(args: tool_args.protocolArgs):
 
-    utils.validate_user()
+    utils.enforce_role('admin')
 
     try:
         url = utils.get_github_url(args.protocol_name)
@@ -85,7 +85,7 @@ def get_protocol(args: tool_args.protocolArgs):
     
 @server.tool(description="Ask the user to specify the protocol to perform actions on", tags={'disable'})
 async def specify_protocol(ctx: Context = CurrentContext()):
-    utils.validate_user()
+    utils.enforce_role('admin')
     result = await ctx.elicit(
         message = "Please specify a protocol to perform actions on",
         response_type=tool_args.protocolArgs
@@ -100,7 +100,7 @@ async def specify_protocol(ctx: Context = CurrentContext()):
     
 @server.tool(description="Build a protocol to prepare for a save and/or release")
 async def build_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
-    utils.validate_user()
+    utils.enforce_role('admin')
     
     repo_dir = f'{os.getcwd()}/{args.protocol_name}'
 
@@ -184,7 +184,7 @@ async def build_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = Cu
     
 @server.tool(description="Save protocol without releasing. Default to this over save and release. Save after building and before releasing.")
 async def save_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
-    utils.validate_user()
+    utils.enforce_role('admin')
     
     # commit and push changes
     repo_dir = f'{os.getcwd()}/{args.protocol_name}'
@@ -239,7 +239,7 @@ async def save_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = Cur
 
 @server.tool(description="Create a new release version of this protocol and push it to GitHub. Always build and save first")
 async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = CurrentContext()):
-    utils.validate_user()
+    utils.enforce_role('admin')
     # create new release number and push release
     try:
         releases_response = requests.get(
@@ -299,7 +299,7 @@ async def release_protocol(args: tool_args.buildSaveReleaseArgs, ctx: Context = 
 
 @server.tool(description="Create and publish new release for a protocol")
 async def build_save_and_release_protocol(args: tool_args.buildSaveReleaseArgs):
-    utils.validate_user()
+    utils.enforce_role('admin')
 
     print(f"""
     protocol_name: {args.protocol_name}
@@ -338,7 +338,7 @@ async def build_save_and_release_protocol(args: tool_args.buildSaveReleaseArgs):
 @server.tool(description="Replace the contents of an EXISTING CSV file in a protocol's make/CSV directory with uploaded text. Match-existing-names-only: an upload whose file_name has no matching file in the directory is rejected. Used by the web portal to swap in user-supplied CSVs before a build.")
 def swap_csv(args: tool_args.swapCSVArgs):
 
-    utils.validate_user()
+    utils.enforce_role('admin')
     
     if not os.access(args.protocol_name, mode=0):
         return f"Protocol '{args.protocol_name}' not found. Please use `get_protocol` first."
