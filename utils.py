@@ -1,5 +1,6 @@
 import tool_args
 from fastmcp.server.dependencies import get_access_token
+from typing import Literal
 
 def get_github_url(protocol: tool_args.available_protocols) -> str:
     if protocol in ["mindtrails_movement", "mindtrails_spanish"]:
@@ -32,15 +33,14 @@ def increment_tag(tag: str):
     semver = _parse_tag(tag)
     return f'{semver[0]}.{semver[1]}.{semver[2] + 1}'
 
-def validate_user():
-    ALLOW_LIST = {"user_3GVABHlVRLtumhBnIIkAY1IH7oF","user_3GBhLGw7Fczb9jDNvmHEkOwUExh","user_3GBggq1svMAQChxeWLLGnGUspAx","user_3GDxg44ltExURYV4LnmvOaYgnUS","user_3GEZRLcl7NmMUrrUePGNyTgUigE"}
+def enforce_role(role: Literal["admin", "member"]):
 
     token = get_access_token()
-
+    
     if not token:
         raise Exception("No valid token found")
     
-    if (token.claims.get('sub') in ALLOW_LIST) and token.claims.get('email') and token.claims.get('email_verified'):
-        return True
+    if token.claims.get('user')["role"] == f'org:{role}':
+        return
     
     raise Exception("Access denied")
